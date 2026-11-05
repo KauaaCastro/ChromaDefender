@@ -2392,7 +2392,7 @@ PrefabInstance:
       addedObject: {fileID: 1814040577}
     - targetCorrespondingSourceObject: {fileID: 5101847622887478216, guid: 2fe47882e33db8947ad60462e2f89507, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1814040578}
+      addedObject: {fileID: 1814040581}
   m_SourcePrefab: {fileID: 100100000, guid: 2fe47882e33db8947ad60462e2f89507, type: 3}
 --- !u!4 &1814040574 stripped
 Transform:
@@ -2413,7 +2413,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.2D.Animation.Runtime::UnityEngine.U2D.Animation.SpriteLibrary
   m_Library: []
   m_SpriteLibraryAsset: {fileID: 7108339969198208228, guid: b6c8233d1bf182b43b9467c8456fe09f, type: 3}
---- !u!114 &1814040578
+--- !u!114 &1814040581
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2425,7 +2425,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dd9a0c997a7bfb04eb1e8f3670dc3c81, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerBehavior
-  moveSpeed: 3
+  moveSpeed: 5
+  jumpForce: 5
 --- !u!1 &1822517916
 GameObject:
   m_ObjectHideFlags: 0

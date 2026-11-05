@@ -1,0 +1,29 @@
+# Documentação de auxilio do código
+
+### Regras de alteração:
+
+Caso haja qualquer alteração nas regras do código como a númeração das layers, padrão de valores, padrão de arquivos e estruturas devem ser registradas aqui e esse arquivo deve ser compartilhado no grupo do whatsapp ou no google drive, sempre avisar quando houve alteração.
+
+Esse arquivo está no formato MarkDown, então para facilitar a leitura, entendimento e escrita utilize esse site: [Link do site para leitura e edição de MarkDown](https://markdownlivepreview.com/).
+
+Este arquivo deve PERMANECER EM .GITIGNORE
+
+---
+
+# Layers e cenários
+
+### Estrutura das Layers:
+
+### _Regras das layers:_
+
+---
+
+# Regras do GitHub:
+
+Sempre crie uma branch separada ao da principal com o nome do criador e número da tarefa (Atrelada no trello), SEMPRE que for criar uma nova branch, crie a partir da main, caso necessite de algo que ainda não está incluida na main, atribua uma tarefa para o kauã dentro do trello usando a tag (MERGE) exemplo:
+
+`git branch` -> Para visualizar a branch atual.
+
+`git checkout -b <Nome da sua branch>` -> Para criar uma nova branch a partir da branch antiga.
+
+Exemplo de nome para branch: _Castro/GAMEPLAY-5_

@@ -4,7 +4,7 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    public InputManager inputManager { get; private set; }
+    public InputManager InputManager { get; private set; }
 
     private void Awake()
     {
@@ -16,7 +16,6 @@ public class GameManager : MonoBehaviour
         }
 
         Instance = this;
-
-        inputManager = new InputManager();
+        InputManager = new InputManager();
     }
 }
