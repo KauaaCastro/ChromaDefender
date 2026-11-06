@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public enum EnemyPolarityType
@@ -9,7 +10,7 @@ public enum EnemyPolarityType
 }
 
 /// <summary>
-/// Inimigo com patrulha e vulnerabilidade de polaridade elemental.
+/// Inimigo com patrulha, vulnerabilidade de polaridade elemental e animação de morte com spritesheet.
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D), typeof(Collider2D))]
 public class ElementalEnemy : MonoBehaviour, IDamageableTarget
@@ -33,9 +34,15 @@ public class ElementalEnemy : MonoBehaviour, IDamageableTarget
     [SerializeField] private Color iceEnemyColor = new Color(0.4f, 0.85f, 1f, 1f);
     [SerializeField] private Color fireEnemyColor = new Color(1f, 0.5f, 0.2f, 1f);
 
+    [Header("--- Animação de Morte ---")]
+    [SerializeField] private Sprite[] deathFrames;
+    [SerializeField] private float deathFrameDuration = 0.08f;
+    [SerializeField] private bool autoLoadDeathSprites = true;
+
     private Rigidbody2D rb;
     private Collider2D col;
     private SpriteRenderer sr;
+    private Animator anim;
     private float startX;
     private int direction = 1; // 1 = direita, -1 = esquerda
     private bool isDead = false;
@@ -49,6 +56,7 @@ public class ElementalEnemy : MonoBehaviour, IDamageableTarget
         rb = GetComponent<Rigidbody2D>();
         col = GetComponent<Collider2D>();
         sr = GetComponent<SpriteRenderer>();
+        anim = GetComponent<Animator>();
 
         if (rb != null)
         {
@@ -59,6 +67,67 @@ public class ElementalEnemy : MonoBehaviour, IDamageableTarget
         currentHealth = maxHealth;
         startX = transform.position.x;
         ApplyElementalVisuals();
+        LoadDeathSpritesIfEmpty();
+    }
+
+    private void LoadDeathSpritesIfEmpty()
+    {
+        if (deathFrames != null && deathFrames.Length > 0) return;
+        if (!autoLoadDeathSprites) return;
+
+#if UNITY_EDITOR
+        string enemyName = gameObject.name.ToLower();
+        string spritePath = null;
+
+        if (enemyName.Contains("slime") || (sr != null && sr.sprite != null && sr.sprite.name.ToLower().Contains("slime")))
+        {
+            spritePath = "Assets/Monsters Creatures Fantasy 2/Sprites/Slime/death.png";
+        }
+        else if (enemyName.Contains("rat") || (sr != null && sr.sprite != null && sr.sprite.name.ToLower().Contains("rat")))
+        {
+            spritePath = "Assets/Monsters Creatures Fantasy 2/Sprites/Rat/rat-death.png";
+        }
+        else if (enemyName.Contains("bat") || (sr != null && sr.sprite != null && sr.sprite.name.ToLower().Contains("bat")))
+        {
+            spritePath = "Assets/Monsters Creatures Fantasy 2/Sprites/Bat/death.png";
+        }
+        else if (enemyName.Contains("mimic") || (sr != null && sr.sprite != null && sr.sprite.name.ToLower().Contains("mimic")))
+        {
+            spritePath = "Assets/Monsters Creatures Fantasy 2/Sprites/Mimic/death.png";
+        }
+
+        if (!string.IsNullOrEmpty(spritePath))
+        {
+            Object[] assets = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(spritePath);
+            var list = new List<Sprite>();
+            foreach (var a in assets)
+            {
+                if (a is Sprite s) list.Add(s);
+            }
+
+            // Ordena sequencialmente pelo índice do frame (death_0, death_1, etc.)
+            list.Sort((a, b) =>
+            {
+                int ia = ExtractIndex(a.name);
+                int ib = ExtractIndex(b.name);
+                return ia.CompareTo(ib);
+            });
+
+            if (list.Count > 0)
+            {
+                deathFrames = list.ToArray();
+            }
+        }
+#endif
+    }
+
+    private int ExtractIndex(string name)
+    {
+        int idx = name.LastIndexOf('_');
+        if (idx >= 0 && int.TryParse(name.Substring(idx + 1), out int val)) return val;
+        int hyphenIdx = name.LastIndexOf('-');
+        if (hyphenIdx >= 0 && int.TryParse(name.Substring(hyphenIdx + 1), out int hval)) return hval;
+        return 0;
     }
 
     private void ApplyElementalVisuals()
@@ -94,7 +163,7 @@ public class ElementalEnemy : MonoBehaviour, IDamageableTarget
             direction = 1;
         }
 
-        if (rb != null)
+        if (rb != null && rb.bodyType == RigidbodyType2D.Dynamic)
         {
             rb.linearVelocity = new Vector2(direction * moveSpeed, rb.linearVelocity.y);
         }
@@ -193,7 +262,13 @@ public class ElementalEnemy : MonoBehaviour, IDamageableTarget
         isDead = true;
 
         if (col != null) col.enabled = false;
-        if (rb != null) rb.linearVelocity = Vector2.zero;
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            rb.bodyType = RigidbodyType2D.Kinematic; // Congela física para a animação
+        }
+
+        if (anim != null) anim.enabled = false; // Desativa animação de Idle para tocar a morte
 
         Vector3 center = col != null ? (Vector3)col.bounds.center : transform.position;
         if (deathElement == ElementPolarity.Ice)
@@ -219,16 +294,36 @@ public class ElementalEnemy : MonoBehaviour, IDamageableTarget
 
     private IEnumerator DeathRoutine()
     {
-        float elapsed = 0f;
-        float duration = 0.3f;
-        Vector3 startScale = transform.localScale;
-
-        while (elapsed < duration)
+        // 1. Toca os frames da animação de morte do spritesheet
+        if (deathFrames != null && deathFrames.Length > 0 && sr != null)
         {
-            elapsed += Time.deltaTime;
-            float t = elapsed / duration;
-            transform.localScale = Vector3.Lerp(startScale, Vector3.zero, t);
-            yield return null;
+            for (int i = 0; i < deathFrames.Length; i++)
+            {
+                if (deathFrames[i] != null)
+                {
+                    sr.sprite = deathFrames[i];
+                }
+                yield return new WaitForSeconds(deathFrameDuration);
+            }
+
+            // Descansa no último frame (corpo no chão)
+            yield return new WaitForSeconds(0.25f);
+        }
+
+        // 2. Desvanecimento suave (fade out)
+        if (sr != null)
+        {
+            Color initialColor = sr.color;
+            float fadeElapsed = 0f;
+            float fadeDuration = 0.35f;
+
+            while (fadeElapsed < fadeDuration)
+            {
+                fadeElapsed += Time.deltaTime;
+                float alpha = Mathf.Lerp(1f, 0f, fadeElapsed / fadeDuration);
+                sr.color = new Color(initialColor.r, initialColor.g, initialColor.b, alpha);
+                yield return null;
+            }
         }
 
         Destroy(gameObject);

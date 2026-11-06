@@ -20,9 +20,28 @@ Este arquivo deve PERMANECER EM .GITIGNORE
 - **TAB ou Tecla C:** Troca de Polaridade Elemental (**Fogo <-> Gelo**).
 
 # Visual e VFX Elemental
-- O corpo do cavaleiro permanece com a armadura escura / preta intacta (`Color.white`), sem tint verde.
-- Modo Fogo: Chamas místicas orbitando suavemente em anel horizontal na altura da cintura (`FireAura`); espada com lâmina original dourada/alaranjada; cortes com arco flamejante e brasas (`FireVFX.cs`).
-- Modo Gelo: Cristais de gelo orbitando estritamente em anel horizontal na altura da cintura (`ElementOrbitAura.cs`), sem partículas soltas ou cristais na parte de cima/cabeça; shader `SpriteElementTint` converte apenas os pixels da lâmina para azul gélido; cortes com arco gélido procedural e impacto congelante no alvo (`IceVFX.cs`).
+- O corpo do cavaleiro permanece com a armadura escura / preta intacta e 100% limpa (`Color.white`), sem tint verde e sem auras orbitando o personagem.
+- Modo Fogo: Espada com lâmina original dourada/alaranjada; cortes com arco flamejante e brasas (`FireVFX.cs`).
+- Modo Gelo: Shader `SpriteElementTint` converte apenas os pixels da lâmina para azul gélido; cortes com arco gélido procedural e impacto congelante no alvo (`IceVFX.cs`).
+
+# Sistema de Fase e Mecânicas da Demo
+- **Construtor Automático da Fase Demo (`DemoLevelBuilder.cs`):**
+  - Menu no Unity: `Chroma Defender > 1. Construir Mapa da Demo (Completo)` e `Chroma Defender > 2. Limpar Mapa da Demo`.
+  - Constrói via código: Cenário Parallax exterior, plataformas calculadas para o pulo do jogador, entrada do castelo, bifurcação e câmara secreta.
+- **Inimigos Elementais (`ElementalEnemy.cs`):**
+  - Neutro: Toma dano de qualquer golpe.
+  - Gelo (Azul): Imune a golpes de Gelo. Exige **Fogo** (`ElementPolarity.Fire`).
+  - Fogo (Vermelho): Imune a golpes de Fogo. Exige **Gelo** (`ElementPolarity.Ice`).
+  - Patrulha horizontal suave e dano de contato com o jogador (respeita a invulnerabilidade do rolamento).
+- **Chave Dourada & Porta Trancada (`KeyPickup.cs` e `LockedDoor.cs`):**
+  - Sem inventário: o jogador utiliza a flag direta `hasCastleKey` em `PlayerBehavior.cs`.
+  - A porta requer a chave dourada para se erguer suavemente e liberar a passagem.
+- **Armadilha de Chão Falso (`CrumblingPlatform.cs`):**
+  - Posicionada na ponte diante da chave visível. Ao se aproximar/pisar, treme por 0.35s e desaba, derrubando o jogador no fosso inferior para escalar de volta.
+- **Baús Interativos (`ChestInteractable.cs`):**
+  - Abrem ao sofrer golpe de espada ou com interação (`E`), concedendo upgrades (Ataque Pesado, Cura Total, Tesouro da Demo).
+- **Câmera 2D Suave (`CameraFollow2D.cs`):**
+  - Perseguição suave com `SmoothDamp` e delimitação de limites (`minBounds` e `maxBounds`).
 
 # Sistema de Combate e Configuração de Danos
 - **Danos Configuráveis no Inspector do PlayerBehavior:**

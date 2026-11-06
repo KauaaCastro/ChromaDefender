@@ -13,6 +13,7 @@ public class InputManager
     private InputAction parryAction;
     private InputAction switchPolarityAction;
     public event Action OnJump;
+    public event Action OnJumpCanceled;
     public event Action OnLightAttack;
     public event Action OnHeavyAttack;
     public event Action OnSpecialAttack;
@@ -28,6 +29,7 @@ public class InputManager
         playerControls = new PlayerControls();
         playerControls.Gameplay.Enable();
         playerControls.Gameplay.Jump.performed += OnJumpPerformed;
+        playerControls.Gameplay.Jump.canceled += _ => OnJumpCanceled?.Invoke();
 
         // Ataque Leve: Botão Esquerdo do Mouse
         lightAttackAction = new InputAction("LightAttack", InputActionType.Button, "<Mouse>/leftButton");

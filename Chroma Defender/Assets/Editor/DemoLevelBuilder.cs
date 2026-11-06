@@ -1,28 +1,49 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
 /// <summary>
-/// Construtor automatizado do mapa da fase de demonstração de Chroma Defender.
-/// Gera via código: cenários de paralaxe, plataformas, armadilha de chão falso,
-/// chave dourada, porta trancada, inimigos com polaridade e câmara secreta.
+/// Construtor automatizado de fases e zonas para Chroma Defender.
+/// Permite construir a Zona 1 (Floresta Externa / Vilarejo) isolada com assets da Cainos,
+/// ou o mapa completo com todas as 4 zonas.
 /// </summary>
 public static class DemoLevelBuilder
 {
     private const string RootName = "--- DEMO LEVEL ---";
 
-    // Layer de chão configurada no projeto
+    // Layer de chão configurada no projeto (Ground = 6)
     private static int GroundLayer => LayerMask.NameToLayer("Ground") >= 0 ? LayerMask.NameToLayer("Ground") : 6;
 
-    [MenuItem("Chroma Defender/1. Construir Mapa da Demo (Completo)")]
-    public static void BuildDemoLevelMenu()
+    // Cache de sprites do Tileset de Chão da Cainos
+    private static Dictionary<string, Sprite> groundSpritesCache;
+
+    [MenuItem("Chroma Defender/1. Construir Zona 1 (Floresta Tranquila - Cainos Assets)")]
+    public static void BuildZone1StandaloneMenu()
     {
+        if (!EditorSceneManager.GetActiveScene().isLoaded || EditorSceneManager.GetActiveScene().name != "SampleScene")
+        {
+            EditorSceneManager.OpenScene("Assets/Scenes/SampleScene.unity");
+        }
         ClearExistingLevel();
-        BuildLevel();
+        BuildZone1Only();
+        EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
     }
 
-    [MenuItem("Chroma Defender/2. Limpar Mapa da Demo")]
+    [MenuItem("Chroma Defender/2. Construir Mapa Completo da Demo (Todas as Zonas)")]
+    public static void BuildFullDemoLevelMenu()
+    {
+        if (!EditorSceneManager.GetActiveScene().isLoaded || EditorSceneManager.GetActiveScene().name != "SampleScene")
+        {
+            EditorSceneManager.OpenScene("Assets/Scenes/SampleScene.unity");
+        }
+        ClearExistingLevel();
+        BuildFullLevel();
+        EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
+    }
+
+    [MenuItem("Chroma Defender/3. Limpar Mapa da Demo")]
     public static void ClearExistingLevelMenu()
     {
         ClearExistingLevel();
@@ -38,42 +59,85 @@ public static class DemoLevelBuilder
         }
     }
 
-    public static void BuildLevel()
+    // ------------------------------------------------------------------
+    // CONSTRUÇÃO: Apenas Zona 1 (Foco Total em Acabamento e Tranquilidade)
+    // ------------------------------------------------------------------
+    public static void BuildZone1Only()
     {
         GameObject root = new GameObject(RootName);
-        Undo.RegisterCreatedObjectUndo(root, "Construir Mapa da Demo");
+        Undo.RegisterCreatedObjectUndo(root, "Construir Zona 1 (Cainos)");
 
-        // 1. Câmera e Jogador
-        SetupCameraAndPlayer(root.transform);
+        // 1. Câmera e Jogador (Limites focados na Zona 1)
+        SetupCameraAndPlayer(new Vector2(-5f, -4f), new Vector2(30f, 8f), new Vector3(-2.5f, 0.5f, 0f));
 
-        // 2. Fundo Parallax e Atmosfera
+        // 2. Fundo Parallax Claro e Acolhedor
         Transform bgGroup = new GameObject("01_Background_Parallax").transform;
         bgGroup.SetParent(root.transform);
-        BuildParallaxBackground(bgGroup);
+        BuildZone1Parallax(bgGroup);
 
-        // 3. Geometria do Cenário e Plataformas
+        // 3. Terreno Real com Tileset Cainos (TX Tileset Ground)
         Transform terrainGroup = new GameObject("02_Terrain_And_Platforms").transform;
         terrainGroup.SetParent(root.transform);
-        BuildTerrain(terrainGroup);
+        BuildZone1Terrain(terrainGroup);
 
-        // 4. Objetos Interativos, Puzzles e Baús
-        Transform interactiveGroup = new GameObject("03_Interactive_And_Puzzles").transform;
-        interactiveGroup.SetParent(root.transform);
-        BuildInteractiveObjects(interactiveGroup);
+        // 4. Objetos do Vilarejo, Decorações, Baú e Boneco de Treino
+        Transform propsGroup = new GameObject("03_Village_Props_And_Decor").transform;
+        propsGroup.SetParent(root.transform);
+        BuildZone1Props(propsGroup, isStandalone: true);
 
-        // 5. Inimigos da Fase
-        Transform enemiesGroup = new GameObject("04_Enemies").transform;
+        // 5. Inimigos da Zona 1 (Animados e balanceados)
+        Transform enemiesGroup = new GameObject("04_Enemies_Zone1").transform;
         enemiesGroup.SetParent(root.transform);
-        BuildEnemies(enemiesGroup);
+        BuildZone1Enemies(enemiesGroup);
 
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-        Debug.Log("<color=green>[Chroma Defender]</color> ★ Mapa da Demo construído com sucesso! Pressione PLAY para testar.");
+        Debug.Log("<color=green>[Chroma Defender]</color> ★ Zona 1 (Floresta Tranquila - Cainos) construída com sucesso! Pressione PLAY.");
     }
 
     // ------------------------------------------------------------------
-    // 1. Câmera e Posicionamento do Jogador
+    // CONSTRUÇÃO: Mapa Completo (Zona 1 Cainos + Zonas 2, 3 e 4)
     // ------------------------------------------------------------------
-    private static void SetupCameraAndPlayer(Transform root)
+    public static void BuildFullLevel()
+    {
+        GameObject root = new GameObject(RootName);
+        Undo.RegisterCreatedObjectUndo(root, "Construir Mapa Completo");
+
+        // 1. Câmera e Jogador (Limites globais)
+        SetupCameraAndPlayer(new Vector2(-5f, -9f), new Vector2(105f, 15f), new Vector3(-2.5f, 0.5f, 0f));
+
+        // 2. Fundo Parallax
+        Transform bgGroup = new GameObject("01_Background_Parallax").transform;
+        bgGroup.SetParent(root.transform);
+        BuildZone1Parallax(bgGroup);
+        // Fundo de pedra para o interior do castelo
+        CreateFlatPlatform(bgGroup, "Castle_Backdrop_Stone", new Vector2(65f, 2f), new Vector2(65f, 14f), new Color(0.12f, 0.13f, 0.17f, 1f), -15, false);
+
+        // 3. Terreno e Plataformas
+        Transform terrainGroup = new GameObject("02_Terrain_And_Platforms").transform;
+        terrainGroup.SetParent(root.transform);
+        BuildZone1Terrain(terrainGroup);
+        BuildCastleTerrain(terrainGroup);
+
+        // 4. Objetos Interativos
+        Transform propsGroup = new GameObject("03_Interactive_And_Props").transform;
+        propsGroup.SetParent(root.transform);
+        BuildZone1Props(propsGroup, isStandalone: false);
+        BuildCastleInteractiveObjects(propsGroup);
+
+        // 5. Inimigos
+        Transform enemiesGroup = new GameObject("04_Enemies").transform;
+        enemiesGroup.SetParent(root.transform);
+        BuildZone1Enemies(enemiesGroup);
+        BuildCastleEnemies(enemiesGroup);
+
+        EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+        Debug.Log("<color=green>[Chroma Defender]</color> ★ Mapa Completo construído com sucesso! Pressione PLAY.");
+    }
+
+    // ------------------------------------------------------------------
+    // 1. Câmera e Jogador
+    // ------------------------------------------------------------------
+    private static void SetupCameraAndPlayer(Vector2 minBounds, Vector2 maxBounds, Vector3 playerPos)
     {
         Camera cam = Camera.main;
         if (cam != null)
@@ -81,59 +145,59 @@ public static class DemoLevelBuilder
             CameraFollow2D follow = cam.GetComponent<CameraFollow2D>();
             if (follow == null) follow = cam.gameObject.AddComponent<CameraFollow2D>();
 
-            // Configura limites do mapa da demo
-            var minProp = new SerializedObject(follow).FindProperty("minBounds");
-            var maxProp = new SerializedObject(follow).FindProperty("maxBounds");
-            if (minProp != null && maxProp != null)
-            {
-                var so = new SerializedObject(follow);
-                so.FindProperty("minBounds").vector2Value = new Vector2(-4f, -9f);
-                so.FindProperty("maxBounds").vector2Value = new Vector2(105f, 15f);
-                so.FindProperty("offset").vector3Value = new Vector3(0f, 1.2f, -10f);
-                so.FindProperty("smoothTime").floatValue = 0.2f;
-                so.ApplyModifiedProperties();
-            }
+            var so = new SerializedObject(follow);
+            so.FindProperty("minBounds").vector2Value = minBounds;
+            so.FindProperty("maxBounds").vector2Value = maxBounds;
+            so.FindProperty("offset").vector3Value = new Vector3(0f, 1.2f, -10f);
+            so.FindProperty("smoothTime").floatValue = 0.2f;
+            so.ApplyModifiedProperties();
         }
 
         PlayerBehavior player = Object.FindFirstObjectByType<PlayerBehavior>();
         if (player != null)
         {
-            player.transform.position = new Vector3(-2f, 0.5f, 0f);
+            player.transform.position = playerPos;
             player.gameObject.layer = LayerMask.NameToLayer("Default");
         }
     }
 
     // ------------------------------------------------------------------
-    // 2. Fundo Parallax
+    // 2. Fundo Parallax Claro e Tranquilo da Zona 1
     // ------------------------------------------------------------------
-    private static void BuildParallaxBackground(Transform parent)
+    private static void BuildZone1Parallax(Transform parent)
     {
         Sprite skySprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/FREE Parallax Forest Background HQ/Parallax Forest Background/01_Sky.png");
-        Sprite forestNear = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/FREE Parallax Forest Background HQ/Parallax Forest Background/02_Forest.png");
-        Sprite forestMid = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/FREE Parallax Forest Background HQ/Parallax Forest Background/03_Forest.png");
         Sprite forestFar = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/FREE Parallax Forest Background HQ/Parallax Forest Background/04_Forest.png");
+        Sprite forestMid = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/FREE Parallax Forest Background HQ/Parallax Forest Background/03_Forest.png");
+        Sprite forestNear = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/FREE Parallax Forest Background HQ/Parallax Forest Background/02_Forest.png");
 
+        // Painéis de céu límpido (lado a lado para cobrir toda a zona)
         if (skySprite != null)
         {
-            CreateBackdropQuad(parent, "Sky_01", skySprite, new Vector3(15f, 5f, 0f), new Vector3(3.5f, 3f, 1f), -50);
-            CreateBackdropQuad(parent, "Sky_02", skySprite, new Vector3(65f, 5f, 0f), new Vector3(3.5f, 3f, 1f), -50);
+            CreateBackdropQuad(parent, "Sky_01", skySprite, new Vector3(0f, 4.5f, 0f), new Vector3(1.4f, 1.3f, 1f), -50);
+            CreateBackdropQuad(parent, "Sky_02", skySprite, new Vector3(22f, 4.5f, 0f), new Vector3(1.4f, 1.3f, 1f), -50);
         }
 
+        // Camada distante suave
         if (forestFar != null)
         {
-            CreateBackdropQuad(parent, "ForestFar", forestFar, new Vector3(12f, 3f, 0f), new Vector3(3.2f, 3.2f, 1f), -40);
-        }
-        if (forestMid != null)
-        {
-            CreateBackdropQuad(parent, "ForestMid", forestMid, new Vector3(14f, 2f, 0f), new Vector3(3.2f, 3.2f, 1f), -30);
-        }
-        if (forestNear != null)
-        {
-            CreateBackdropQuad(parent, "ForestNear", forestNear, new Vector3(15f, 1f, 0f), new Vector3(3.2f, 3.2f, 1f), -20);
+            CreateBackdropQuad(parent, "Forest_Far_01", forestFar, new Vector3(0f, 2.5f, 0f), new Vector3(1.3f, 1.2f, 1f), -40);
+            CreateBackdropQuad(parent, "Forest_Far_02", forestFar, new Vector3(20f, 2.5f, 0f), new Vector3(1.3f, 1.2f, 1f), -40);
         }
 
-        // Fundo de pedra escura para o interior do castelo
-        CreatePlatform(parent, "Castle_Backdrop_Stone", new Vector2(65f, 2f), new Vector2(65f, 14f), new Color(0.12f, 0.13f, 0.17f, 1f), -15, false);
+        // Camada intermediária
+        if (forestMid != null)
+        {
+            CreateBackdropQuad(parent, "Forest_Mid_01", forestMid, new Vector3(2f, 1.8f, 0f), new Vector3(1.25f, 1.15f, 1f), -30);
+            CreateBackdropQuad(parent, "Forest_Mid_02", forestMid, new Vector3(22f, 1.8f, 0f), new Vector3(1.25f, 1.15f, 1f), -30);
+        }
+
+        // Camada próxima
+        if (forestNear != null)
+        {
+            CreateBackdropQuad(parent, "Forest_Near_01", forestNear, new Vector3(4f, 1.0f, 0f), new Vector3(1.2f, 1.1f, 1f), -20);
+            CreateBackdropQuad(parent, "Forest_Near_02", forestNear, new Vector3(24f, 1.0f, 0f), new Vector3(1.2f, 1.1f, 1f), -20);
+        }
     }
 
     private static void CreateBackdropQuad(Transform parent, string name, Sprite sprite, Vector3 pos, Vector3 scale, int sortingOrder)
@@ -148,269 +212,243 @@ public static class DemoLevelBuilder
     }
 
     // ------------------------------------------------------------------
-    // 3. Geometria do Terreno e Plataformas
+    // 3. Terreno Real Cainos (TX Tileset Ground) da Zona 1
     // ------------------------------------------------------------------
-    private static void BuildTerrain(Transform parent)
+    private static void BuildZone1Terrain(Transform parent)
     {
-        Color grassColor = new Color(0.38f, 0.62f, 0.32f);
-        Color dirtColor = new Color(0.28f, 0.22f, 0.16f);
-        Color woodColor = new Color(0.55f, 0.42f, 0.26f);
-        Color stoneColor = new Color(0.35f, 0.37f, 0.42f);
-        Color dungeonColor = new Color(0.22f, 0.24f, 0.28f);
+        Transform groundParent = new GameObject("Zone1_Lush_Ground").transform;
+        groundParent.SetParent(parent);
+        groundParent.gameObject.layer = GroundLayer;
 
-        // --- ZONA 1: Exterior / Floresta (x: -5 a 28) ---
-        // Chão principal
-        CreatePlatform(parent, "Forest_Ground", new Vector2(11.5f, -1f), new Vector2(35f, 2f), grassColor);
-        // Subterrâneo visual
-        CreatePlatform(parent, "Forest_Underground", new Vector2(11.5f, -3f), new Vector2(35f, 2f), dirtColor, -5, false);
+        int startX = -6;
+        int endX = 28;
 
-        // Plataformas de salto no exterior
-        CreatePlatform(parent, "Jump_Platform_1", new Vector2(7f, 1.2f), new Vector2(3.5f, 0.5f), woodColor);
-        CreatePlatform(parent, "Jump_Platform_2", new Vector2(12.5f, 2.3f), new Vector2(3.5f, 0.5f), woodColor);
+        // Monta visualmente os blocos 32x32 do tileset Cainos
+        for (int x = startX; x <= endX; x++)
+        {
+            // Linha Y = -1 (Superfície de grama verde com flores/folhas)
+            string topSprite = (x == startX) ? "TX Tileset Ground_0" :
+                               (x == endX) ? "TX Tileset Ground_2" :
+                               "TX Tileset Ground_1";
+            CreateGroundTile(groundParent, topSprite, new Vector3(x, -1f, 0f), 2);
+
+            // Linha Y = -2 (Subsolo de terra fértil)
+            string midSprite = (x == startX) ? "TX Tileset Ground_3" :
+                               (x == endX) ? "TX Tileset Ground_5" :
+                               "TX Tileset Ground_4";
+            CreateGroundTile(groundParent, midSprite, new Vector3(x, -2f, 0f), 2);
+
+            // Linha Y = -3 (Fundo rochoso de terra)
+            string botSprite = (x == startX) ? "TX Tileset Ground_6" :
+                               (x == endX) ? "TX Tileset Ground_8" :
+                               "TX Tileset Ground_7";
+            CreateGroundTile(groundParent, botSprite, new Vector3(x, -3f, 0f), 2);
+
+            // Linha Y = -4 (Fundação profunda para evitar vácuo)
+            CreateGroundTile(groundParent, "TX Tileset Ground_4", new Vector3(x, -4f, 0f), 2);
+        }
+
+        // Colisor contínuo e perfeito para o chão (sem quinas travando o cavaleiro)
+        GameObject groundCollider = new GameObject("Ground_Surface_Collider");
+        groundCollider.transform.SetParent(groundParent);
+        groundCollider.layer = GroundLayer;
+
+        float width = (endX - startX + 1);
+        float centerX = (startX + endX) * 0.5f;
+
+        var box = groundCollider.AddComponent<BoxCollider2D>();
+        // Topo da caixa fica em Y = -0.5f (exatamente onde a grama do sprite termina)
+        box.offset = new Vector2(centerX, -2.5f);
+        box.size = new Vector2(width, 4.0f);
 
         // Parede de limite esquerdo do mapa
-        CreatePlatform(parent, "Left_Boundary_Wall", new Vector2(-6f, 4f), new Vector2(2f, 12f), stoneColor);
+        GameObject leftWall = new GameObject("Left_Boundary_Wall");
+        leftWall.transform.SetParent(parent);
+        leftWall.layer = GroundLayer;
+        var leftBox = leftWall.AddComponent<BoxCollider2D>();
+        leftBox.offset = new Vector2(-6.6f, 3.0f);
+        leftBox.size = new Vector2(1.2f, 10f);
 
-        // --- ZONA 2: Muralha e Portão do Castelo (x: 28 a 38) ---
-        // Torre/Muralha externa
-        CreatePlatform(parent, "Castle_Rampart_Wall", new Vector2(28f, 5f), new Vector2(2.5f, 10f), stoneColor);
-        CreatePlatform(parent, "Castle_Gate_Floor", new Vector2(33f, -1f), new Vector2(10f, 2f), stoneColor);
-        CreatePlatform(parent, "Castle_Gate_Arch", new Vector2(33f, 4.5f), new Vector2(10f, 2f), stoneColor);
+        // --- Plataformas Elevadas da Cainos (Saltos do Tutorial) ---
+        // Plataforma 1 (X = 6.0, Y = 1.3): Plataforma modular de madeira
+        InstantiateCainosPrefab(parent, "PF Village Props - Platform 02 X3.prefab", new Vector3(6.0f, 1.3f, 0f), GroundLayer);
+        // Coletável decorativo em cima da plataforma
+        InstantiateCainosPrefab(parent, "PF Village Props - Apple 01.prefab", new Vector3(6.5f, 1.8f, 0f));
 
-        // --- ZONA 3: Interior do Castelo (x: 38 a 55) ---
-        // Chão do Salão Principal
-        CreatePlatform(parent, "Hall_Ground", new Vector2(44f, -1f), new Vector2(14f, 2f), stoneColor);
-        // Teto do Castelo
-        CreatePlatform(parent, "Castle_Ceiling", new Vector2(65f, 7.5f), new Vector2(65f, 2f), stoneColor);
+        // Plataforma 2 (X = 12.0, Y = 2.2): Ponte suspensa rústica
+        InstantiateCainosPrefab(parent, "PF Village Props - Wooden Bridge X6.prefab", new Vector3(12.0f, 2.2f, 0f), GroundLayer);
+        InstantiateCainosPrefab(parent, "PF Village Props - Flower 01.prefab", new Vector3(13.2f, 2.6f, 0f));
+    }
 
-        // Plataformas para subir na bifurcação
-        CreatePlatform(parent, "Stair_Step_1", new Vector2(43f, 1.3f), new Vector2(2.8f, 0.5f), woodColor);
-        CreatePlatform(parent, "Stair_Step_2", new Vector2(40f, 3.0f), new Vector2(3.0f, 0.5f), woodColor);
+    private static Sprite GetGroundSprite(string spriteName)
+    {
+        if (groundSpritesCache == null)
+        {
+            groundSpritesCache = new Dictionary<string, Sprite>();
+            Object[] assets = AssetDatabase.LoadAllAssetsAtPath("Assets/Cainos/Pixel Art Platformer - Village Props/Texture/TX Tileset Ground.png");
+            foreach (var obj in assets)
+            {
+                if (obj is Sprite sp) groundSpritesCache[sp.name] = sp;
+            }
+        }
+        groundSpritesCache.TryGetValue(spriteName, out Sprite result);
+        return result;
+    }
 
-        // --- CAMINHO FALSO (Elevado à esquerda, x: 32 a 42, y: 5.0) ---
-        CreatePlatform(parent, "FakePath_Floor", new Vector2(37f, 4.8f), new Vector2(11f, 0.8f), stoneColor);
-        CreatePlatform(parent, "FakePath_DeadEnd_Wall", new Vector2(31f, 6.5f), new Vector2(1.5f, 4f), stoneColor);
+    private static GameObject CreateGroundTile(Transform parent, string spriteName, Vector3 pos, int sortingOrder)
+    {
+        Sprite sp = GetGroundSprite(spriteName);
+        if (sp == null) return null;
 
-        // --- CAMINHO VERDADEIRO: A Ponte da Chave (x: 53 a 76, y: 2.2) ---
-        // Passarela de acesso
-        CreatePlatform(parent, "Bridge_Access", new Vector2(56f, 1.4f), new Vector2(3.5f, 0.5f), woodColor);
-        CreatePlatform(parent, "Bridge_Main", new Vector2(62f, 2.2f), new Vector2(9f, 0.7f), stoneColor);
+        GameObject tile = new GameObject(spriteName);
+        tile.transform.SetParent(parent);
+        tile.transform.position = pos;
 
-        // O Pedestal Ledge (onde a chave fica visível)
-        CreatePlatform(parent, "Key_Pedestal_Ledge", new Vector2(74f, 2.2f), new Vector2(5f, 0.7f), stoneColor);
-        CreatePlatform(parent, "Key_Stone_Pedestal", new Vector2(74f, 2.8f), new Vector2(1f, 0.6f), new Color(0.7f, 0.65f, 0.55f));
-
-        // --- FOSSO INFERIOR (Subterrâneo onde o jogador cai, x: 60 a 78, y: -4.5) ---
-        CreatePlatform(parent, "Pit_Floor", new Vector2(69f, -4.5f), new Vector2(19f, 1.8f), dungeonColor);
-        CreatePlatform(parent, "Pit_Wall_Left", new Vector2(59f, -1.2f), new Vector2(1.8f, 6f), dungeonColor);
-        CreatePlatform(parent, "Pit_Wall_Right", new Vector2(79f, -1.2f), new Vector2(1.8f, 6f), dungeonColor);
-
-        // Plataformas verticais de escalada para sair do fosso
-        CreatePlatform(parent, "Climb_Step_1", new Vector2(62f, -2.8f), new Vector2(2.5f, 0.5f), woodColor);
-        CreatePlatform(parent, "Climb_Step_2", new Vector2(66.5f, -1.3f), new Vector2(2.5f, 0.5f), woodColor);
-        CreatePlatform(parent, "Climb_Step_3", new Vector2(62.5f, 0.3f), new Vector2(2.5f, 0.5f), woodColor);
-        CreatePlatform(parent, "Climb_Step_4", new Vector2(67f, 1.6f), new Vector2(2.5f, 0.5f), woodColor);
-
-        // --- ZONA 4: Salão da Câmara Secreta (atrás da porta trancada, x: 50 a 92) ---
-        CreatePlatform(parent, "Secret_Chamber_Floor", new Vector2(71f, -1f), new Vector2(40f, 2f), new Color(0.25f, 0.28f, 0.35f));
-        CreatePlatform(parent, "Secret_Chamber_EndWall", new Vector2(92f, 3.2f), new Vector2(2f, 10f), stoneColor);
-
-        // Parede de pedra sólida acima da porta trancada (impede passar por cima)
-        CreatePlatform(parent, "Door_Header_Wall", new Vector2(50f, 5.0f), new Vector2(1.6f, 4.5f), stoneColor);
+        var sr = tile.AddComponent<SpriteRenderer>();
+        sr.sprite = sp;
+        sr.sortingOrder = sortingOrder;
+        return tile;
     }
 
     // ------------------------------------------------------------------
-    // 4. Objetos Interativos, Puzzles e Baús
+    // 4. Decorações, Cenário de Vilarejo, Baú e Boneco de Treino
     // ------------------------------------------------------------------
-    private static void BuildInteractiveObjects(Transform parent)
+    private static void BuildZone1Props(Transform parent, bool isStandalone)
     {
-        // 1. Baú Inicial de Madeira (Desbloqueia Ataque Pesado)
-        CreateChest(parent, "Initial_Chest_Wooden", new Vector3(17f, 0.1f, 0f), ChestRewardType.UnlockHeavyAttack, false);
+        const float groundY = -0.5f;
 
-        // 2. Portão Elemental (Cristal de Gelo que exige Fogo)
-        CreateElementalBarrier(parent, "Ice_Crystal_Barrier", new Vector3(36f, 0.6f, 0f), ElementPolarity.Fire);
+        // 1. Árvores exuberantes da Cainos
+        InstantiateCainosPrefab(parent, "PF Village Props - Tree 01.prefab", new Vector3(-4.0f, groundY, 0f), scale: 1.15f, sortingOrder: -5);
+        InstantiateCainosPrefab(parent, "PF Village Props - Tree 02.prefab", new Vector3(1.0f, groundY, 0f), scale: 0.95f, sortingOrder: -5);
+        InstantiateCainosPrefab(parent, "PF Village Props - Tree 01.prefab", new Vector3(4.8f, groundY, 0f), scale: 1.05f, sortingOrder: -5);
+        InstantiateCainosPrefab(parent, "PF Village Props - Tree 02.prefab", new Vector3(16.0f, groundY, 0f), scale: 1.1f, sortingOrder: -5);
+        InstantiateCainosPrefab(parent, "PF Village Props - Tree 01.prefab", new Vector3(20.8f, groundY, 0f), scale: 1.0f, sortingOrder: -5);
+        InstantiateCainosPrefab(parent, "PF Village Props - Tree 02.prefab", new Vector3(26.5f, groundY, 0f), scale: 1.05f, sortingOrder: -5);
 
-        // 3. A Grande Porta Trancada do Castelo
-        CreateLockedDoor(parent, "Castle_Grand_Locked_Door", new Vector3(50f, 0.7f, 0f));
+        // 2. Cercas rústicas de madeira
+        InstantiateCainosPrefab(parent, "PF Village Props - Fence A.prefab", new Vector3(-3.5f, groundY, 0f), sortingOrder: -2);
+        InstantiateCainosPrefab(parent, "PF Village Props - Fence B.prefab", new Vector3(-1.8f, groundY, 0f), sortingOrder: -2);
+        InstantiateCainosPrefab(parent, "PF Village Props - Fence A.prefab", new Vector3(18.2f, groundY, 0f), sortingOrder: -2);
+        InstantiateCainosPrefab(parent, "PF Village Props - Fence B.prefab", new Vector3(19.9f, groundY, 0f), sortingOrder: -2);
 
-        // 4. Baú do Caminho Falso (Cura Total de Elixir)
-        CreateChest(parent, "FakePath_Bonus_Chest", new Vector3(35f, 5.4f, 0f), ChestRewardType.FullHeal, false);
+        // 3. Girassóis e Flores (Dão a atmosfera clara, vibrante e tranquila)
+        InstantiateCainosPrefab(parent, "PF Village Props - Sunflower 01.prefab", new Vector3(2.5f, groundY, 0f), sortingOrder: 4);
+        InstantiateCainosPrefab(parent, "PF Village Props - Sunflower 02.prefab", new Vector3(7.8f, groundY, 0f), sortingOrder: 4);
+        InstantiateCainosPrefab(parent, "PF Village Props - Sunflower 03.prefab", new Vector3(15.2f, groundY, 0f), sortingOrder: 4);
+        InstantiateCainosPrefab(parent, "PF Village Props - Sunflower 01.prefab", new Vector3(21.5f, groundY, 0f), sortingOrder: 4);
+        InstantiateCainosPrefab(parent, "PF Village Props - Sunflower 02.prefab", new Vector3(25.2f, groundY, 0f), sortingOrder: 4);
 
-        // 5. O Chão Falso diante da Chave (Crumbling Platform)
-        CreateCrumblingTrap(parent, "Key_Trap_CrumblingFloor", new Vector3(69f, 2.2f, 0f), new Vector2(4.5f, 0.7f));
+        InstantiateCainosPrefab(parent, "PF Village Props - Flower 01.prefab", new Vector3(-2.0f, groundY, 0f), sortingOrder: 4);
+        InstantiateCainosPrefab(parent, "PF Village Props - Flower 02.prefab", new Vector3(3.2f, groundY, 0f), sortingOrder: 4);
+        InstantiateCainosPrefab(parent, "PF Village Props - Flower 01.prefab", new Vector3(10.2f, groundY, 0f), sortingOrder: 4);
+        InstantiateCainosPrefab(parent, "PF Village Props - Flower 02.prefab", new Vector3(17.5f, groundY, 0f), sortingOrder: 4);
+        InstantiateCainosPrefab(parent, "PF Village Props - Flower 01.prefab", new Vector3(22.8f, groundY, 0f), sortingOrder: 4);
 
-        // 6. A Chave Dourada Flutuante
-        CreateGoldenKey(parent, "Castle_Golden_Key", new Vector3(74f, 3.5f, 0f));
+        // 4. Arbustos e Tufos de Grama
+        InstantiateCainosPrefab(parent, "PF Village Props - Bush 01.prefab", new Vector3(-3.8f, groundY, 0f), sortingOrder: -1);
+        InstantiateCainosPrefab(parent, "PF Village Props - Bush 02.prefab", new Vector3(4.2f, groundY, 0f), sortingOrder: -1);
+        InstantiateCainosPrefab(parent, "PF Village Props - Bush 03.prefab", new Vector3(13.0f, groundY, 0f), sortingOrder: -1);
+        InstantiateCainosPrefab(parent, "PF Village Props - Bush 01.prefab", new Vector3(20.2f, groundY, 0f), sortingOrder: -1);
 
-        // 7. O Grande Baú Dourado da Câmara Secreta (Recompensa da Demo)
-        CreateChest(parent, "Secret_Demo_Golden_Chest", new Vector3(84f, 0.2f, 0f), ChestRewardType.SecretDemoTreasure, true);
-
-        // 8. Tochas e Decorações
-        CreateTorch(parent, new Vector3(31f, 1.8f, 0f));
-        CreateTorch(parent, new Vector3(38f, 1.8f, 0f));
-        CreateTorch(parent, new Vector3(48f, 1.8f, 0f));
-        CreateTorch(parent, new Vector3(52f, 1.8f, 0f));
-        CreateTorch(parent, new Vector3(78f, 1.8f, 0f));
-        CreateTorch(parent, new Vector3(86f, 1.8f, 0f));
-    }
-
-    private static void CreateChest(Transform parent, string name, Vector3 pos, ChestRewardType reward, bool golden)
-    {
-        string prefabPath = golden ?
-            "Assets/Cainos/Pixel Art Platformer - Village Props/Prefab/PF Village Props - Chest Golden.prefab" :
-            "Assets/Cainos/Pixel Art Platformer - Village Props/Prefab/PF Village Props - Chest Wooden.prefab";
-
-        GameObject chestPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-        GameObject chestObj = null;
-
-        if (chestPrefab != null)
+        float[] grassPositions = { -3f, -1.2f, 0.8f, 2.2f, 5.5f, 7.0f, 9.0f, 12.0f, 14.5f, 18.0f, 23.5f, 27.0f };
+        for (int i = 0; i < grassPositions.Length; i++)
         {
-            chestObj = (GameObject)PrefabUtility.InstantiatePrefab(chestPrefab);
-            chestObj.name = name;
-        }
-        else
-        {
-            chestObj = new GameObject(name);
-            var sr = chestObj.AddComponent<SpriteRenderer>();
-            sr.sprite = GetDefaultSquareSprite();
-            sr.color = golden ? new Color(1f, 0.85f, 0.2f) : new Color(0.6f, 0.4f, 0.2f);
+            string grassName = $"PF Village Props - Grass 0{(i % 6) + 1}.prefab";
+            InstantiateCainosPrefab(parent, grassName, new Vector3(grassPositions[i], groundY, 0f), sortingOrder: 5);
         }
 
-        chestObj.transform.SetParent(parent);
-        chestObj.transform.position = pos;
+        // 5. Elementos de Vilarejo Rústico
+        // Placa inicial apontando para a direita (➔ Aventura)
+        InstantiateCainosPrefab(parent, "PF Village Props - Road Sign 01.prefab", new Vector3(-2.8f, groundY, 0f), sortingOrder: 3);
 
-        var box = chestObj.GetComponent<BoxCollider2D>();
-        if (box == null) box = chestObj.AddComponent<BoxCollider2D>();
-        box.size = new Vector2(1.2f, 1.0f);
-        box.isTrigger = false;
+        // Pilha de lenha e toco
+        InstantiateCainosPrefab(parent, "PF Village Props - Wood Logs.prefab", new Vector3(-0.2f, groundY, 0f), sortingOrder: 3);
+        InstantiateCainosPrefab(parent, "PF Village Props - Stump.prefab", new Vector3(-0.9f, groundY, 0f), sortingOrder: 3);
 
-        var interactable = chestObj.GetComponent<ChestInteractable>();
-        if (interactable == null) interactable = chestObj.AddComponent<ChestInteractable>();
+        // Poço de pedra, barris e caixotes
+        InstantiateCainosPrefab(parent, "PF Village Props - Well.prefab", new Vector3(13.5f, groundY, 0f), sortingOrder: 0);
+        InstantiateCainosPrefab(parent, "PF Village Props - Barrel.prefab", new Vector3(14.8f, groundY, 0f), sortingOrder: 3);
+        InstantiateCainosPrefab(parent, "PF Village Props - Crate Small.prefab", new Vector3(15.4f, groundY, 0f), sortingOrder: 3);
+        InstantiateCainosPrefab(parent, "PF Village Props - Crate Large.prefab", new Vector3(24.2f, groundY, 0f), sortingOrder: 3);
 
-        var so = new SerializedObject(interactable);
-        so.FindProperty("rewardType").enumValueIndex = (int)reward;
-        so.ApplyModifiedProperties();
-    }
+        // Postes de iluminação de estrada
+        InstantiateCainosPrefab(parent, "PF Village Props - Road Lamp.prefab", new Vector3(8.2f, groundY, 0f), sortingOrder: 3);
+        InstantiateCainosPrefab(parent, "PF Village Props - Road Lamp.prefab", new Vector3(25.5f, groundY, 0f), sortingOrder: 3);
 
-    private static void CreateElementalBarrier(Transform parent, string name, Vector3 pos, ElementPolarity required)
-    {
-        GameObject barrier = new GameObject(name);
-        barrier.transform.SetParent(parent);
-        barrier.transform.position = pos;
+        // Rochedos de contenção à esquerda
+        InstantiateCainosPrefab(parent, "PF Village Props - Rock 01.prefab", new Vector3(-5.8f, groundY, 0f), sortingOrder: 3);
+        InstantiateCainosPrefab(parent, "PF Village Props - Rock 02.prefab", new Vector3(-5.2f, groundY, 0f), sortingOrder: 3);
 
-        var sr = barrier.AddComponent<SpriteRenderer>();
-        sr.sprite = GetDefaultSquareSprite();
-        sr.drawMode = SpriteDrawMode.Sliced;
-        sr.size = new Vector2(1.2f, 2.8f);
-        sr.sortingOrder = 5;
+        // Placa no final da Zona 1
+        InstantiateCainosPrefab(parent, "PF Village Props - Road Sign 02.prefab", new Vector3(27.5f, groundY, 0f), sortingOrder: 3);
 
-        var box = barrier.AddComponent<BoxCollider2D>();
-        box.size = new Vector2(1.2f, 2.8f);
-
-        var trigger = barrier.AddComponent<PolarityTrigger>();
-        var so = new SerializedObject(trigger);
-        so.FindProperty("requiredPolarity").enumValueIndex = (int)required;
-        so.ApplyModifiedProperties();
-    }
-
-    private static void CreateLockedDoor(Transform parent, string name, Vector3 pos)
-    {
-        GameObject door = new GameObject(name);
-        door.transform.SetParent(parent);
-        door.transform.position = pos;
-
-        var sr = door.AddComponent<SpriteRenderer>();
-        sr.sprite = GetDefaultSquareSprite();
-        sr.drawMode = SpriteDrawMode.Sliced;
-        sr.size = new Vector2(1.4f, 3.2f);
-        sr.color = new Color(0.45f, 0.35f, 0.25f);
-        sr.sortingOrder = 4;
-
-        var box = door.AddComponent<BoxCollider2D>();
-        box.size = new Vector2(1.4f, 3.2f);
-
-        door.AddComponent<LockedDoor>();
-    }
-
-    private static void CreateCrumblingTrap(Transform parent, string name, Vector3 pos, Vector2 size)
-    {
-        GameObject trap = new GameObject(name);
-        trap.transform.SetParent(parent);
-        trap.transform.position = pos;
-        trap.layer = GroundLayer;
-
-        var sr = trap.AddComponent<SpriteRenderer>();
-        sr.sprite = GetDefaultSquareSprite();
-        sr.drawMode = SpriteDrawMode.Sliced;
-        sr.size = size;
-        sr.color = new Color(0.5f, 0.46f, 0.42f);
-        sr.sortingOrder = 3;
-
-        var box = trap.AddComponent<BoxCollider2D>();
-        box.size = size;
-
-        trap.AddComponent<CrumblingPlatform>();
-    }
-
-    private static void CreateGoldenKey(Transform parent, string name, Vector3 pos)
-    {
-        GameObject keyObj = new GameObject(name);
-        keyObj.transform.SetParent(parent);
-        keyObj.transform.position = pos;
-        keyObj.transform.localScale = new Vector3(1.5f, 1.5f, 1f);
-
-        var sr = keyObj.AddComponent<SpriteRenderer>();
-        Sprite keySprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/karsiori/Pixel Art Key Pack - V2/Key 1 - Gold.png");
-        sr.sprite = keySprite != null ? keySprite : GetDefaultSquareSprite();
-        sr.sortingOrder = 8;
-        sr.color = new Color(1f, 0.88f, 0.25f, 1f);
-
-        var circle = keyObj.AddComponent<CircleCollider2D>();
-        circle.radius = 0.5f;
-        circle.isTrigger = true;
-
-        keyObj.AddComponent<KeyPickup>();
-    }
-
-    private static void CreateTorch(Transform parent, Vector3 pos)
-    {
-        var torchPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Cainos/Pixel Art Platformer - Village Props/Prefab/PF Village Props - Torch.prefab");
-        if (torchPrefab != null)
+        // 6. Boneco de Treino Cainos (Target Dummy com TrainingDummy.cs)
+        GameObject dummy = InstantiateCainosPrefab(parent, "PF Village Props - Training Dummy.prefab", new Vector3(-0.8f, groundY, 0f), sortingOrder: 3);
+        if (dummy != null)
         {
-            GameObject torch = (GameObject)PrefabUtility.InstantiatePrefab(torchPrefab);
-            torch.transform.SetParent(parent);
-            torch.transform.position = pos;
+            var boxCol = dummy.GetComponent<BoxCollider2D>();
+            if (boxCol == null) boxCol = dummy.AddComponent<BoxCollider2D>();
+            boxCol.size = new Vector2(0.8f, 1.4f);
+            boxCol.offset = new Vector2(0f, 0.7f);
+
+            var rb = dummy.GetComponent<Rigidbody2D>();
+            if (rb == null) rb = dummy.AddComponent<Rigidbody2D>();
+            rb.freezeRotation = true;
+            rb.linearDamping = 14f;
+
+            if (dummy.GetComponent<TrainingDummy>() == null)
+            {
+                dummy.AddComponent<TrainingDummy>();
+            }
+        }
+
+        // 7. Baú Inicial de Madeira (Desbloqueio do Ataque Pesado)
+        GameObject chest = InstantiateCainosPrefab(parent, "PF Village Props - Chest Wooden.prefab", new Vector3(16.5f, groundY, 0f), sortingOrder: 3);
+        if (chest != null)
+        {
+            var boxCol = chest.GetComponent<BoxCollider2D>();
+            if (boxCol == null) boxCol = chest.AddComponent<BoxCollider2D>();
+            boxCol.size = new Vector2(1.2f, 1.0f);
+            boxCol.offset = new Vector2(0f, 0.5f);
+            boxCol.isTrigger = false;
+
+            var interactable = chest.GetComponent<ChestInteractable>();
+            if (interactable == null) interactable = chest.AddComponent<ChestInteractable>();
+
+            var so = new SerializedObject(interactable);
+            so.FindProperty("rewardType").enumValueIndex = (int)ChestRewardType.UnlockHeavyAttack;
+            so.ApplyModifiedProperties();
+        }
+
+        // 8. Se for teste isolado da Zona 1, coloca uma barricada no final (X = 28.5)
+        if (isStandalone)
+        {
+            GameObject barricade = InstantiateCainosPrefab(parent, "PF Village Props - Barricade.prefab", new Vector3(28.5f, groundY, 0f), sortingOrder: 3);
+            if (barricade != null)
+            {
+                var barCol = barricade.GetComponent<BoxCollider2D>();
+                if (barCol == null) barCol = barricade.AddComponent<BoxCollider2D>();
+                barCol.size = new Vector2(1.5f, 2.0f);
+                barCol.offset = new Vector2(0f, 1.0f);
+            }
         }
     }
 
     // ------------------------------------------------------------------
-    // 5. Inimigos da Fase
+    // 5. Inimigos Vivos e Animados da Zona 1
     // ------------------------------------------------------------------
-    private static void BuildEnemies(Transform parent)
+    private static void BuildZone1Enemies(Transform parent)
     {
-        // 1. Slime Neutro na Floresta
-        CreateEnemy(parent, "Enemy_Slime_Neutral", new Vector3(10f, 0.2f, 0f), EnemyPolarityType.Neutral, 50, 3f, false);
+        // 1. Slime Neutro (Slime saltitante e amigável para aprender o combo leve)
+        CreateAnimatedEnemy(parent, "Enemy_Slime_Neutral", new Vector3(8.8f, -0.4f, 0f),
+            EnemyPolarityType.Neutral, 50, 2.0f, false);
 
-        // 2. Rato Neutro na Floresta
-        CreateEnemy(parent, "Enemy_Rat_Neutral", new Vector3(23f, 0.2f, 0f), EnemyPolarityType.Neutral, 40, 2.5f, true);
-
-        // 3. Slime de Gelo diante do Castelo (Requer FOGO)
-        CreateEnemy(parent, "Enemy_Ice_Slime_Gate", new Vector3(32.5f, 0.2f, 0f), EnemyPolarityType.Ice, 65, 2.5f, false);
-
-        // 4. Inimigos do Caminho Falso (1 Fogo + 1 Gelo)
-        CreateEnemy(parent, "FakePath_Fire_Rat", new Vector3(35f, 5.6f, 0f), EnemyPolarityType.Fire, 55, 2.5f, true);
-        CreateEnemy(parent, "FakePath_Ice_Slime", new Vector3(40f, 5.6f, 0f), EnemyPolarityType.Ice, 65, 2.5f, false);
-
-        // 5. Inimigos do Fosso Inferior (Onde o jogador cai)
-        CreateEnemy(parent, "Pit_Ice_Rat", new Vector3(64f, -3.3f, 0f), EnemyPolarityType.Ice, 55, 3f, true);
-        CreateEnemy(parent, "Pit_Fire_Slime", new Vector3(74f, -3.3f, 0f), EnemyPolarityType.Fire, 65, 3f, false);
-
-        // 6. Guardiões da Câmara Secreta
-        CreateEnemy(parent, "SecretChamber_Fire_Guardian", new Vector3(64f, 0.2f, 0f), EnemyPolarityType.Fire, 80, 3f, true);
-        CreateEnemy(parent, "SecretChamber_Ice_Guardian", new Vector3(76f, 0.2f, 0f), EnemyPolarityType.Ice, 80, 3f, false);
+        // 2. Rato Neutro (Rápido e rasteiro para aprender o rolamento / esquiva)
+        CreateAnimatedEnemy(parent, "Enemy_Rat_Neutral", new Vector3(23.0f, -0.4f, 0f),
+            EnemyPolarityType.Neutral, 40, 2.5f, true);
     }
 
-    private static void CreateEnemy(Transform parent, string name, Vector3 pos, EnemyPolarityType polarity, int health, float patrolDist, bool isRat)
+    private static void CreateAnimatedEnemy(Transform parent, string name, Vector3 pos, EnemyPolarityType polarity, int health, float patrolDist, bool isRat)
     {
         GameObject enemy = new GameObject(name);
         enemy.transform.SetParent(parent);
@@ -422,7 +460,6 @@ public static class DemoLevelBuilder
             "Assets/Monsters Creatures Fantasy 2/Sprites/Rat/idle.png" :
             "Assets/Monsters Creatures Fantasy 2/Sprites/Slime/idle.png";
 
-        // Tenta carregar sub-sprite sliced
         Sprite[] sprites = AssetDatabase.LoadAllAssetsAtPath(spritePath) as Sprite[];
         if (sprites != null && sprites.Length > 0)
         {
@@ -433,28 +470,215 @@ public static class DemoLevelBuilder
             sr.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(spritePath);
         }
 
-        if (sr.sprite == null) sr.sprite = GetDefaultSquareSprite();
-        sr.sortingOrder = 3;
+        sr.sortingOrder = 4;
+
+        // Animação viva de Idle/Salto
+        var anim = enemy.AddComponent<Animator>();
+        string controllerPath = isRat ?
+            "Assets/Monsters Creatures Fantasy 2/Animations/idle_0.controller" :
+            "Assets/Monsters Creatures Fantasy 2/Animations/idle_0 1.controller";
+        var ctrl = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(controllerPath);
+        if (ctrl != null) anim.runtimeAnimatorController = ctrl;
 
         var rb = enemy.AddComponent<Rigidbody2D>();
         rb.freezeRotation = true;
         rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
         var col = enemy.AddComponent<BoxCollider2D>();
-        col.size = new Vector2(0.8f, 0.8f);
+        col.size = new Vector2(0.8f, 0.7f);
+        col.offset = new Vector2(0f, 0.35f);
 
         var comp = enemy.AddComponent<ElementalEnemy>();
         var so = new SerializedObject(comp);
         so.FindProperty("polarity").enumValueIndex = (int)polarity;
         so.FindProperty("maxHealth").intValue = health;
         so.FindProperty("patrolDistance").floatValue = patrolDist;
+        so.FindProperty("moveSpeed").floatValue = isRat ? 1.8f : 1.2f;
         so.ApplyModifiedProperties();
     }
 
     // ------------------------------------------------------------------
-    // Helpers
+    // Prefab Loader Auxiliar da Cainos
     // ------------------------------------------------------------------
-    private static GameObject CreatePlatform(Transform parent, string name, Vector2 pos, Vector2 size, Color color, int sortingOrder = 1, bool addCollider = true)
+    private static GameObject InstantiateCainosPrefab(Transform parent, string prefabName, Vector3 pos, int layer = -1, float scale = 1f, int sortingOrder = int.MinValue)
+    {
+        string fullPath = $"Assets/Cainos/Pixel Art Platformer - Village Props/Prefab/{prefabName}";
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(fullPath);
+        if (prefab == null) return null;
+
+        GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        if (instance == null) return null;
+
+        instance.transform.SetParent(parent);
+        instance.transform.position = pos;
+        if (scale != 1f) instance.transform.localScale = Vector3.one * scale;
+
+        if (layer >= 0)
+        {
+            SetLayerRecursively(instance, layer);
+        }
+
+        if (sortingOrder != int.MinValue)
+        {
+            foreach (var sr in instance.GetComponentsInChildren<SpriteRenderer>(true))
+            {
+                sr.sortingOrder = sortingOrder;
+            }
+        }
+
+        return instance;
+    }
+
+    private static void SetLayerRecursively(GameObject obj, int layer)
+    {
+        obj.layer = layer;
+        foreach (Transform child in obj.transform)
+        {
+            SetLayerRecursively(child.gameObject, layer);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // MÉTODOS DE APOIO PARA O MAPA COMPLETO (ZONAS 2, 3 E 4)
+    // ------------------------------------------------------------------
+    private static void BuildCastleTerrain(Transform parent)
+    {
+        Color stoneColor = new Color(0.35f, 0.37f, 0.42f);
+        Color dungeonColor = new Color(0.22f, 0.24f, 0.28f);
+        Color woodColor = new Color(0.55f, 0.42f, 0.26f);
+
+        // Zona 2: Muralha e Portão
+        CreateFlatPlatform(parent, "Castle_Rampart_Wall", new Vector2(28f, 5f), new Vector2(2.5f, 10f), stoneColor);
+        CreateFlatPlatform(parent, "Castle_Gate_Floor", new Vector2(33f, -1f), new Vector2(10f, 2f), stoneColor);
+        CreateFlatPlatform(parent, "Castle_Gate_Arch", new Vector2(33f, 4.5f), new Vector2(10f, 2f), stoneColor);
+
+        // Zona 3: Salão Principal
+        CreateFlatPlatform(parent, "Hall_Ground", new Vector2(44f, -1f), new Vector2(14f, 2f), stoneColor);
+        CreateFlatPlatform(parent, "Castle_Ceiling", new Vector2(65f, 7.5f), new Vector2(65f, 2f), stoneColor);
+
+        CreateFlatPlatform(parent, "Stair_Step_1", new Vector2(43f, 1.3f), new Vector2(2.8f, 0.5f), woodColor);
+        CreateFlatPlatform(parent, "Stair_Step_2", new Vector2(40f, 3.0f), new Vector2(3.0f, 0.5f), woodColor);
+
+        // Caminho Falso
+        CreateFlatPlatform(parent, "FakePath_Floor", new Vector2(37f, 4.8f), new Vector2(11f, 0.8f), stoneColor);
+        CreateFlatPlatform(parent, "FakePath_DeadEnd_Wall", new Vector2(31f, 6.5f), new Vector2(1.5f, 4f), stoneColor);
+
+        // Caminho Verdadeiro
+        CreateFlatPlatform(parent, "Bridge_Access", new Vector2(56f, 1.4f), new Vector2(3.5f, 0.5f), woodColor);
+        CreateFlatPlatform(parent, "Bridge_Main", new Vector2(62f, 2.2f), new Vector2(9f, 0.7f), stoneColor);
+
+        CreateFlatPlatform(parent, "Key_Pedestal_Ledge", new Vector2(74f, 2.2f), new Vector2(5f, 0.7f), stoneColor);
+        CreateFlatPlatform(parent, "Key_Stone_Pedestal", new Vector2(74f, 2.8f), new Vector2(1f, 0.6f), new Color(0.7f, 0.65f, 0.55f));
+
+        // Fosso
+        CreateFlatPlatform(parent, "Pit_Floor", new Vector2(69f, -4.5f), new Vector2(19f, 1.8f), dungeonColor);
+        CreateFlatPlatform(parent, "Pit_Wall_Left", new Vector2(59f, -1.2f), new Vector2(1.8f, 6f), dungeonColor);
+        CreateFlatPlatform(parent, "Pit_Wall_Right", new Vector2(79f, -1.2f), new Vector2(1.8f, 6f), dungeonColor);
+
+        CreateFlatPlatform(parent, "Climb_Step_1", new Vector2(62f, -2.8f), new Vector2(2.5f, 0.5f), woodColor);
+        CreateFlatPlatform(parent, "Climb_Step_2", new Vector2(66.5f, -1.3f), new Vector2(2.5f, 0.5f), woodColor);
+        CreateFlatPlatform(parent, "Climb_Step_3", new Vector2(62.5f, 0.3f), new Vector2(2.5f, 0.5f), woodColor);
+        CreateFlatPlatform(parent, "Climb_Step_4", new Vector2(67f, 1.6f), new Vector2(2.5f, 0.5f), woodColor);
+
+        // Zona 4: Câmara Secreta
+        CreateFlatPlatform(parent, "Secret_Chamber_Floor", new Vector2(71f, -1f), new Vector2(40f, 2f), new Color(0.25f, 0.28f, 0.35f));
+        CreateFlatPlatform(parent, "Secret_Chamber_EndWall", new Vector2(92f, 3.2f), new Vector2(2f, 10f), stoneColor);
+        CreateFlatPlatform(parent, "Door_Header_Wall", new Vector2(50f, 5.0f), new Vector2(1.6f, 4.5f), stoneColor);
+    }
+
+    private static void BuildCastleInteractiveObjects(Transform parent)
+    {
+        // Portão Elemental (Gelo exige FOGO)
+        GameObject barrier = new GameObject("Ice_Crystal_Barrier");
+        barrier.transform.SetParent(parent);
+        barrier.transform.position = new Vector3(36f, 0.6f, 0f);
+        var srB = barrier.AddComponent<SpriteRenderer>();
+        srB.sprite = GetDefaultSquareSprite();
+        srB.size = new Vector2(1.2f, 2.8f);
+        srB.sortingOrder = 5;
+        srB.color = new Color(0.3f, 0.8f, 1f, 0.85f);
+        var boxB = barrier.AddComponent<BoxCollider2D>();
+        boxB.size = new Vector2(1.2f, 2.8f);
+        var trig = barrier.AddComponent<PolarityTrigger>();
+        var soTrig = new SerializedObject(trig);
+        soTrig.FindProperty("requiredPolarity").enumValueIndex = (int)ElementPolarity.Fire;
+        soTrig.ApplyModifiedProperties();
+
+        // Grande Porta Trancada
+        GameObject door = new GameObject("Castle_Grand_Locked_Door");
+        door.transform.SetParent(parent);
+        door.transform.position = new Vector3(50f, 0.7f, 0f);
+        var srD = door.AddComponent<SpriteRenderer>();
+        srD.sprite = GetDefaultSquareSprite();
+        srD.size = new Vector2(1.4f, 3.2f);
+        srD.color = new Color(0.45f, 0.35f, 0.25f);
+        srD.sortingOrder = 4;
+        var boxD = door.AddComponent<BoxCollider2D>();
+        boxD.size = new Vector2(1.4f, 3.2f);
+        door.AddComponent<LockedDoor>();
+
+        // Baú do Caminho Falso (Cura Total)
+        GameObject fakeChest = InstantiateCainosPrefab(parent, "PF Village Props - Chest Wooden.prefab", new Vector3(35f, 5.4f, 0f));
+        if (fakeChest != null)
+        {
+            var ci = fakeChest.GetComponent<ChestInteractable>() ?? fakeChest.AddComponent<ChestInteractable>();
+            var so = new SerializedObject(ci);
+            so.FindProperty("rewardType").enumValueIndex = (int)ChestRewardType.FullHeal;
+            so.ApplyModifiedProperties();
+        }
+
+        // Chão Falso diante da chave
+        GameObject trap = new GameObject("Key_Trap_CrumblingFloor");
+        trap.transform.SetParent(parent);
+        trap.transform.position = new Vector3(69f, 2.2f, 0f);
+        trap.layer = GroundLayer;
+        var srT = trap.AddComponent<SpriteRenderer>();
+        srT.sprite = GetDefaultSquareSprite();
+        srT.drawMode = SpriteDrawMode.Sliced;
+        srT.size = new Vector2(4.5f, 0.7f);
+        srT.color = new Color(0.5f, 0.46f, 0.42f);
+        srT.sortingOrder = 3;
+        var boxT = trap.AddComponent<BoxCollider2D>();
+        boxT.size = new Vector2(4.5f, 0.7f);
+        trap.AddComponent<CrumblingPlatform>();
+
+        // Chave Dourada
+        GameObject key = new GameObject("Castle_Golden_Key");
+        key.transform.SetParent(parent);
+        key.transform.position = new Vector3(74f, 3.5f, 0f);
+        key.transform.localScale = Vector3.one * 1.5f;
+        var srK = key.AddComponent<SpriteRenderer>();
+        srK.sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/karsiori/Pixel Art Key Pack - V2/Key 1 - Gold.png") ?? GetDefaultSquareSprite();
+        srK.sortingOrder = 8;
+        srK.color = new Color(1f, 0.88f, 0.25f, 1f);
+        var colK = key.AddComponent<CircleCollider2D>();
+        colK.radius = 0.5f;
+        colK.isTrigger = true;
+        key.AddComponent<KeyPickup>();
+
+        // Grande Baú Dourado (Câmara Secreta)
+        GameObject goldenChest = InstantiateCainosPrefab(parent, "PF Village Props - Chest Golden.prefab", new Vector3(84f, 0.2f, 0f));
+        if (goldenChest != null)
+        {
+            var ci = goldenChest.GetComponent<ChestInteractable>() ?? goldenChest.AddComponent<ChestInteractable>();
+            var so = new SerializedObject(ci);
+            so.FindProperty("rewardType").enumValueIndex = (int)ChestRewardType.SecretDemoTreasure;
+            so.ApplyModifiedProperties();
+        }
+    }
+
+    private static void BuildCastleEnemies(Transform parent)
+    {
+        CreateAnimatedEnemy(parent, "Enemy_Ice_Slime_Gate", new Vector3(32.5f, 0.2f, 0f), EnemyPolarityType.Ice, 65, 2.5f, false);
+        CreateAnimatedEnemy(parent, "FakePath_Fire_Rat", new Vector3(35f, 5.6f, 0f), EnemyPolarityType.Fire, 55, 2.5f, true);
+        CreateAnimatedEnemy(parent, "FakePath_Ice_Slime", new Vector3(40f, 5.6f, 0f), EnemyPolarityType.Ice, 65, 2.5f, false);
+        CreateAnimatedEnemy(parent, "Pit_Ice_Rat", new Vector3(64f, -3.3f, 0f), EnemyPolarityType.Ice, 55, 3f, true);
+        CreateAnimatedEnemy(parent, "Pit_Fire_Slime", new Vector3(74f, -3.3f, 0f), EnemyPolarityType.Fire, 65, 3f, false);
+        CreateAnimatedEnemy(parent, "SecretChamber_Fire_Guardian", new Vector3(64f, 0.2f, 0f), EnemyPolarityType.Fire, 80, 3f, true);
+        CreateAnimatedEnemy(parent, "SecretChamber_Ice_Guardian", new Vector3(76f, 0.2f, 0f), EnemyPolarityType.Ice, 80, 3f, false);
+    }
+
+    private static GameObject CreateFlatPlatform(Transform parent, string name, Vector2 pos, Vector2 size, Color color, int sortingOrder = 1, bool addCollider = true)
     {
         GameObject go = new GameObject(name);
         go.transform.SetParent(parent);
@@ -482,7 +706,6 @@ public static class DemoLevelBuilder
     {
         if (defaultSquareSprite == null)
         {
-            // Busca o sprite padrão de quadrado do Unity ou cria uma textura sólida
             defaultSquareSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd");
             if (defaultSquareSprite == null)
             {

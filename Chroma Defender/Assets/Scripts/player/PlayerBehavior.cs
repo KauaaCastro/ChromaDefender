@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -143,10 +144,14 @@ public class PlayerBehavior : MonoBehaviour
     [SerializeField] private Vector2 attackHitboxOffset = new Vector2(0.85f, 0.1f);
     [SerializeField] private LayerMask enemyLayers;
 
-    [Header("--- Vida & Dano ---")]
+    [Header("--- Vida, Dano & Respawn ---")]
     [SerializeField] private int maxHealth = 100;
     [SerializeField] private int currentHealth;
     [SerializeField] private float hurtInvulnerabilityTime = 0.6f;
+    [Tooltip("Tempo em segundos após o início da animação de morte para respawnar o cavaleiro.")]
+    [SerializeField] private float deathRespawnDelay = 1.2f;
+    [Tooltip("Tempo de invulnerabilidade e piscar suave após renascer.")]
+    [SerializeField] private float respawnInvulnerabilityTime = 1.5f;
 
     [Header("--- Chaves & Progressão da Fase ---")]
     [SerializeField] private bool hasCastleKey = false;
@@ -199,6 +204,10 @@ public class PlayerBehavior : MonoBehaviour
     private float invulnerableUntil;
     private bool specialEffectSpawned;
     private float nextPolaritySwitchTime;
+    private Vector3 safeSpawnPosition;
+    private float spawnGraceTimer;
+    private Coroutine deathRespawnCoroutine;
+    private Coroutine flashCoroutine;
 
     // Duração aproximada dos clips
     private float attack1Length = 0.6f;
@@ -226,15 +235,46 @@ public class PlayerBehavior : MonoBehaviour
     public event Action<AttackType> OnAttackStarted;
     public event Action<int, int> OnHealthChanged; // (current, max)
     public event Action OnPlayerDeath;
+    public event Action OnPlayerRespawn;
 
     private float Progress => actionDuration > 0f ? Mathf.Clamp01(actionTime / actionDuration) : 1f;
 
     private void Awake()
     {
+        // Se por acidente o jogador estiver dentro de outro objeto (ex: Camera), desanexa imediatamente
+        if (transform.parent != null)
+        {
+            transform.SetParent(null, true);
+        }
+
+        safeSpawnPosition = transform.position;
+        spawnGraceTimer = 0.45f;
+
+        // Corrige valores no Inspector para garantir movimento responsivo sem sensação de gelo
+        if (moveSpeed < 6.5f) moveSpeed = 6.5f;
+        if (groundAcceleration < 80f) groundAcceleration = 140f;
+        if (groundDeceleration < 80f) groundDeceleration = 140f;
+
         rb = GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+            rb.interpolation = RigidbodyInterpolation2D.Interpolate;
+            rb.freezeRotation = true;
+            rb.linearVelocity = Vector2.zero;
+        }
+
         isGroundedChecker = GetComponent<IsGroundedChecker>();
         animator = GetComponent<Animator>();
         spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+
+#if UNITY_EDITOR
+        if (animator != null && (animator.runtimeAnimatorController == null || animator.runtimeAnimatorController.name != "Player"))
+        {
+            var fullCtrl = UnityEditor.AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/Animations/Player.controller");
+            if (fullCtrl != null) animator.runtimeAnimatorController = fullCtrl;
+        }
+#endif
 
         playerBoxCollider = GetComponent<BoxCollider2D>();
         playerCollider = playerBoxCollider != null ? (Collider2D)playerBoxCollider : GetComponent<Collider2D>();
@@ -244,15 +284,26 @@ public class PlayerBehavior : MonoBehaviour
             defaultColliderOffset = playerBoxCollider.offset;
         }
 
+        jumpBufferTimer = 0f;
+        coyoteTimer = 0f;
+        jumpLockout = 0.2f;
+        landTimer = 0f;
+        airTime = 0f;
+
         currentHealth = maxHealth;
         RemoveAuras();
         ApplyPolarityVisuals();
+
+        AutoSetupGroundColliders();
     }
 
     private void Start()
     {
+        AlignSpawnWithGround();
+
         var input = GameManager.Instance.InputManager;
         input.OnJump += HandleJumpInput;
+        input.OnJumpCanceled += HandleJumpCanceled;
         input.OnLightAttack += HandleLightAttackInput;
         input.OnHeavyAttack += HandleHeavyAttackInput;
         input.OnSpecialAttack += HandleSpecialAttackInput;
@@ -262,11 +313,68 @@ public class PlayerBehavior : MonoBehaviour
         input.OnSwitchPolarity += HandleSwitchPolarityInput;
     }
 
+    private void AutoSetupGroundColliders()
+    {
+        // Garante que qualquer Tilemap com tiles de chao possua colisores solidos soldados (sem quinas internas que travam a corrida)
+        var tilemaps = FindObjectsByType<UnityEngine.Tilemaps.Tilemap>(FindObjectsSortMode.None);
+        foreach (var tm in tilemaps)
+        {
+            if (tm.gameObject.layer == LayerMask.NameToLayer("Ground") || tm.gameObject.name.ToLower().Contains("ground"))
+            {
+                var tilemapCol = tm.GetComponent<UnityEngine.Tilemaps.TilemapCollider2D>();
+                if (tilemapCol == null)
+                {
+                    tilemapCol = tm.gameObject.AddComponent<UnityEngine.Tilemaps.TilemapCollider2D>();
+                }
+
+                // Solda as bordas dos tiles via CompositeCollider2D para eliminar 100% as travadas na corrida
+                var composite = tm.GetComponent<CompositeCollider2D>();
+                if (composite == null)
+                {
+                    var rbTilemap = tm.GetComponent<Rigidbody2D>();
+                    if (rbTilemap == null)
+                    {
+                        rbTilemap = tm.gameObject.AddComponent<Rigidbody2D>();
+                    }
+                    rbTilemap.bodyType = RigidbodyType2D.Static;
+
+                    composite = tm.gameObject.AddComponent<CompositeCollider2D>();
+                    composite.geometryType = CompositeCollider2D.GeometryType.Polygons;
+                }
+                tilemapCol.usedByComposite = true;
+            }
+        }
+    }
+
+    private void AlignSpawnWithGround()
+    {
+        if (playerCollider == null) playerCollider = GetComponent<Collider2D>();
+        if (playerCollider != null)
+        {
+            int mask = LayerMask.GetMask("Ground", "Default");
+            RaycastHit2D hit = Physics2D.Raycast(transform.position, Vector2.down, 12f, mask);
+            if (hit.collider != null && !hit.collider.isTrigger)
+            {
+                float playerHalfHeight = playerCollider.bounds.extents.y;
+                transform.position = new Vector3(transform.position.x, hit.point.y + playerHalfHeight + 0.03f, transform.position.z);
+                safeSpawnPosition = transform.position;
+            }
+            else
+            {
+                safeSpawnPosition = transform.position;
+            }
+        }
+        if (rb != null) rb.linearVelocity = Vector2.zero;
+        jumpBufferTimer = 0f;
+        coyoteTimer = 0f;
+    }
+
     private void OnDestroy()
     {
         if (GameManager.Instance == null || GameManager.Instance.InputManager == null) return;
         var input = GameManager.Instance.InputManager;
         input.OnJump -= HandleJumpInput;
+        input.OnJumpCanceled -= HandleJumpCanceled;
         input.OnLightAttack -= HandleLightAttackInput;
         input.OnHeavyAttack -= HandleHeavyAttackInput;
         input.OnSpecialAttack -= HandleSpecialAttackInput;
@@ -279,7 +387,19 @@ public class PlayerBehavior : MonoBehaviour
     // ------------------------------------------------------------------
     // Eventos de Entrada
     // ------------------------------------------------------------------
-    private void HandleJumpInput() => jumpBufferTimer = jumpBufferTime;
+    private void HandleJumpInput()
+    {
+        if (spawnGraceTimer > 0f) return;
+        jumpBufferTimer = jumpBufferTime;
+    }
+    private void HandleJumpCanceled()
+    {
+        // Pulo variável: soltar o espaço corta a subida suavemente
+        if (rb != null && rb.linearVelocity.y > 1f)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * 0.5f);
+        }
+    }
     private void HandleLightAttackInput() { lightQueued = true; lightQueuedTime = Time.time; }
     private void HandleHeavyAttackInput() { heavyQueued = true; heavyQueuedTime = Time.time; }
     private void HandleSpecialAttackInput() 
@@ -300,6 +420,25 @@ public class PlayerBehavior : MonoBehaviour
         if (IsDead) return;
 
         float dt = Time.deltaTime;
+
+        // Trava de seguranca no spawn / respawn: zera qualquer pulo fantasma
+        if (spawnGraceTimer > 0f)
+        {
+            spawnGraceTimer -= dt;
+            jumpBufferTimer = 0f;
+            if (rb != null && rb.linearVelocity.y > 0.05f)
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0f);
+            }
+        }
+
+        // Queda para fora do mapa / abismo: restaura posicao segura sem pular
+        if (transform.position.y < -15f)
+        {
+            RespawnAtSafePosition();
+            return;
+        }
+
         float moveInput = GameManager.Instance.InputManager.Movement;
 
         TickTimers(dt);
@@ -309,6 +448,106 @@ public class PlayerBehavior : MonoBehaviour
         UpdateMovement(moveInput, dt);
         UpdateFacing(moveInput);
         UpdateAnimation(moveInput);
+    }
+
+    public void RespawnAtSafePosition()
+    {
+        Respawn();
+    }
+
+    public void Respawn()
+    {
+        if (deathRespawnCoroutine != null)
+        {
+            StopCoroutine(deathRespawnCoroutine);
+            deathRespawnCoroutine = null;
+        }
+
+        EndAction();
+
+        // Restaura a vida completa do cavaleiro
+        currentHealth = maxHealth;
+        OnHealthChanged?.Invoke(currentHealth, maxHealth);
+
+        // Reposiciona no ponto de spawn seguro
+        transform.position = safeSpawnPosition;
+
+        // Zera velocidades físicas
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+        }
+
+        // Limpa buffers e temporizadores para evitar qualquer pulo fantasma
+        jumpBufferTimer = 0f;
+        coyoteTimer = 0f;
+        airTime = 0f;
+        spawnGraceTimer = 0.5f;
+        invulnerableUntil = Time.time + respawnInvulnerabilityTime;
+
+        // Limpa filas de comandos pendentes
+        lightQueued = false;
+        heavyQueued = false;
+        specialQueued = false;
+        rollQueued = false;
+        isParryHeld = false;
+
+        // Reseta estado para livre e força a animação de Idle
+        action = ActionState.None;
+        actionTime = 0f;
+        actionDuration = 0f;
+        currentAnimState = null;
+        PlayAnimation(IdleState, 1f, true);
+
+        // Reaplica visuais de polaridade e restaura cor limpa
+        ApplyPolarityVisuals();
+
+        // Inicia feedback visual de piscar suave para indicar invulnerabilidade pós-morte
+        if (flashCoroutine != null) StopCoroutine(flashCoroutine);
+        flashCoroutine = StartCoroutine(RespawnInvulnerabilityFlash());
+
+        OnPlayerRespawn?.Invoke();
+        Debug.Log("<color=green>[Player]</color> ⚔ O Cavaleiro renasceu com vida cheia!");
+    }
+
+    public void SetSafeSpawnPosition(Vector3 newPosition)
+    {
+        safeSpawnPosition = newPosition;
+    }
+
+    private IEnumerator DeathRespawnRoutine()
+    {
+        yield return new WaitForSeconds(deathRespawnDelay);
+        Respawn();
+        deathRespawnCoroutine = null;
+    }
+
+    private IEnumerator RespawnInvulnerabilityFlash()
+    {
+        if (spriteRenderer == null) yield break;
+        float elapsed = 0f;
+        float duration = respawnInvulnerabilityTime;
+
+        while (elapsed < duration)
+        {
+            if (action == ActionState.Dead) yield break;
+
+            float alpha = Mathf.PingPong(elapsed * 10f, 0.6f) + 0.4f;
+            Color c = spriteRenderer.color;
+            c.a = alpha;
+            spriteRenderer.color = c;
+
+            yield return null;
+            elapsed += Time.deltaTime;
+        }
+
+        if (spriteRenderer != null)
+        {
+            Color finalC = spriteRenderer.color;
+            finalC.a = 1f;
+            spriteRenderer.color = finalC;
+        }
+        flashCoroutine = null;
     }
 
     private void TickTimers(float dt)
@@ -321,18 +560,24 @@ public class PlayerBehavior : MonoBehaviour
     {
         jumpLockout -= dt;
 
-        // Quando o jogador está subindo rápido pelo pulo, NUNCA está no chão
-        bool isMovingUpwards = rb.linearVelocity.y > 0.1f;
+        bool groundDetected = isGroundedChecker != null && isGroundedChecker.IsGrounded();
 
-        bool touchingGround = isGroundedChecker != null
-                              && jumpLockout <= 0f
-                              && !isMovingUpwards
-                              && isGroundedChecker.IsGrounded();
+        // So consideramos subida aerea se o jogador realmente executou um pulo recente
+        // Micro-ressaltos fisicos ao correr sobre quinas (< 1.2f) NAO tiram o jogador do chão
+        bool isJumpingUp = jumpLockout > 0f && rb.linearVelocity.y > 1.2f;
+
+        bool touchingGround = groundDetected && !isJumpingUp;
 
         if (touchingGround)
         {
-            // Detecta aterrissagem pesada
-            if (airTime > 0.15f && maxFallVelocityReached <= heavyLandImpactThreshold && action == ActionState.None)
+            // Amortece micro-ressaltos verticais durante a corrida para eliminar 100% as travadas
+            if (jumpLockout <= 0f && rb.linearVelocity.y > 0f && rb.linearVelocity.y < 0.6f)
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0f);
+            }
+
+            // Detecta aterrissagem pesada somente apos quedas reais e longas
+            if (airTime > 0.35f && maxFallVelocityReached <= heavyLandImpactThreshold && action == ActionState.None)
             {
                 landTimer = landLength;
             }
@@ -404,8 +649,8 @@ public class PlayerBehavior : MonoBehaviour
                 playerBoxCollider.offset = defaultColliderOffset;
             }
 
-            // Restaura colisões com inimigos
-            IgnoreEnemiesCollision(false);
+            // Restaura colisões com inimigos com pequeno atraso para travessia suave
+            StartCoroutine(RestoreEnemyCollisionsDelayed());
         }
 
         action = ActionState.None;
@@ -562,6 +807,7 @@ public class PlayerBehavior : MonoBehaviour
     // ------------------------------------------------------------------
     private void ExecuteJump()
     {
+        if (spawnGraceTimer > 0f) return;
         if (action == ActionState.Attack) EndAction();
 
         rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
@@ -601,28 +847,50 @@ public class PlayerBehavior : MonoBehaviour
         PlayAnimation(RollState, rollAnimSpeed, true);
     }
 
+    private IEnumerator RestoreEnemyCollisionsDelayed()
+    {
+        yield return new WaitForSeconds(0.12f);
+        IgnoreEnemiesCollision(false);
+    }
+
+    private bool IsEnemyCollider(Collider2D col)
+    {
+        if (col == null || col == playerCollider || col.transform.IsChildOf(transform)) return false;
+        if (col.gameObject.layer == LayerMask.NameToLayer("Ground")) return false;
+
+        return col.GetComponent<EnemyBehavior>() != null
+            || col.GetComponentInParent<EnemyBehavior>() != null
+            || col.GetComponent<ElementalEnemy>() != null
+            || col.GetComponentInParent<ElementalEnemy>() != null
+            || col.GetComponent<IDamageableTarget>() != null
+            || col.GetComponentInParent<IDamageableTarget>() != null
+            || col.GetComponent<TrainingDummy>() != null
+            || col.GetComponentInParent<TrainingDummy>() != null
+            || col.CompareTag("Enemy")
+            || col.name.Contains("Enemy")
+            || (col.transform.parent != null && col.transform.parent.name.Contains("Enemy"))
+            || (enemyLayers != 0 && ((1 << col.gameObject.layer) & enemyLayers) != 0);
+    }
+
     private void IgnoreEnemiesCollision(bool ignore)
     {
-        if (playerCollider == null) return;
+        Collider2D[] allPlayerColliders = GetComponentsInChildren<Collider2D>();
+        if (allPlayerColliders == null || allPlayerColliders.Length == 0) return;
 
         if (ignore)
         {
-            Collider2D[] nearby = Physics2D.OverlapCircleAll(transform.position, 4f);
+            Collider2D[] nearby = Physics2D.OverlapCircleAll(transform.position, 12f);
             foreach (var col in nearby)
             {
-                if (col == null || col == playerCollider || col.transform.IsChildOf(transform)) continue;
-
-                // Nunca ignora chão/plataformas
-                if (col.gameObject.layer == LayerMask.NameToLayer("Ground")) continue;
-
-                bool isEnemy = col.GetComponent<TrainingDummy>() != null
-                            || col.GetComponentInParent<TrainingDummy>() != null
-                            || col.CompareTag("Enemy")
-                            || (enemyLayers != 0 && ((1 << col.gameObject.layer) & enemyLayers) != 0);
-
-                if (isEnemy)
+                if (IsEnemyCollider(col))
                 {
-                    Physics2D.IgnoreCollision(playerCollider, col, true);
+                    foreach (var pCol in allPlayerColliders)
+                    {
+                        if (pCol != null && pCol.enabled)
+                        {
+                            Physics2D.IgnoreCollision(pCol, col, true);
+                        }
+                    }
                     if (!ignoredRollColliders.Contains(col))
                     {
                         ignoredRollColliders.Add(col);
@@ -634,9 +902,15 @@ public class PlayerBehavior : MonoBehaviour
         {
             foreach (var col in ignoredRollColliders)
             {
-                if (col != null && playerCollider != null)
+                if (col != null)
                 {
-                    Physics2D.IgnoreCollision(playerCollider, col, false);
+                    foreach (var pCol in allPlayerColliders)
+                    {
+                        if (pCol != null && pCol.enabled)
+                        {
+                            Physics2D.IgnoreCollision(pCol, col, false);
+                        }
+                    }
                 }
             }
             ignoredRollColliders.Clear();
@@ -645,24 +919,29 @@ public class PlayerBehavior : MonoBehaviour
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (action == ActionState.Roll && playerCollider != null)
-        {
-            var col = collision.collider;
-            if (col != null && col.gameObject.layer != LayerMask.NameToLayer("Ground"))
-            {
-                bool isEnemy = col.GetComponent<TrainingDummy>() != null
-                            || col.GetComponentInParent<TrainingDummy>() != null
-                            || col.CompareTag("Enemy")
-                            || (enemyLayers != 0 && ((1 << col.gameObject.layer) & enemyLayers) != 0);
+        HandleRollCollision(collision.collider);
+    }
 
-                if (isEnemy)
+    private void OnCollisionStay2D(Collision2D collision)
+    {
+        HandleRollCollision(collision.collider);
+    }
+
+    private void HandleRollCollision(Collider2D col)
+    {
+        if (action == ActionState.Roll && IsEnemyCollider(col))
+        {
+            Collider2D[] allPlayerColliders = GetComponentsInChildren<Collider2D>();
+            foreach (var pCol in allPlayerColliders)
+            {
+                if (pCol != null && pCol.enabled)
                 {
-                    Physics2D.IgnoreCollision(playerCollider, col, true);
-                    if (!ignoredRollColliders.Contains(col))
-                    {
-                        ignoredRollColliders.Add(col);
-                    }
+                    Physics2D.IgnoreCollision(pCol, col, true);
                 }
+            }
+            if (!ignoredRollColliders.Contains(col))
+            {
+                ignoredRollColliders.Add(col);
             }
         }
     }
@@ -930,7 +1209,7 @@ public class PlayerBehavior : MonoBehaviour
         }
         else if (action == ActionState.Parry)
         {
-            vel.x = Mathf.MoveTowards(vel.x, 0f, groundDeceleration * dt);
+            vel.x = 0f;
         }
         else
         {
@@ -944,8 +1223,25 @@ public class PlayerBehavior : MonoBehaviour
             lungeVelocity = Mathf.MoveTowards(lungeVelocity, 0f, lungeDecay * dt);
             float target = (input * moveSpeed * speedMult) + lungeVelocity;
 
-            float accel = !isGrounded ? airAcceleration : (Mathf.Abs(target) > 0.01f ? groundAcceleration : groundDeceleration);
-            vel.x = Mathf.MoveTowards(vel.x, target, accel * dt);
+            if (isGrounded)
+            {
+                // NO CHÃO: Atrito real e resposta instantanea (SEM EFEITO GELO)
+                if (Mathf.Abs(input) > 0.01f)
+                {
+                    vel.x = Mathf.MoveTowards(vel.x, target, Mathf.Max(groundAcceleration, 120f) * dt);
+                }
+                else
+                {
+                    // Parada imediata e firme no solo ao soltar o botão
+                    vel.x = Mathf.MoveTowards(vel.x, 0f, Mathf.Max(groundDeceleration, 140f) * dt);
+                    if (Mathf.Abs(vel.x) < 0.15f) vel.x = 0f;
+                }
+            }
+            else
+            {
+                // NO AR: Controle aéreo responsivo
+                vel.x = Mathf.MoveTowards(vel.x, target, airAcceleration * dt);
+            }
         }
 
         rb.linearVelocity = vel;
@@ -974,7 +1270,6 @@ public class PlayerBehavior : MonoBehaviour
         string desired;
         float speed = 1f;
 
-        // Prioridade 1: No ar (pulo ou queda) NUNCA toca Run ou Idle, mesmo segurando A ou D!
         if (!isGrounded)
         {
             float vy = rb.linearVelocity.y;
@@ -991,14 +1286,23 @@ public class PlayerBehavior : MonoBehaviour
                 desired = FallLightState;
             }
         }
-        else if (landTimer > 0f && Mathf.Abs(input) < 0.1f)
+        else if (landTimer > 0f && Mathf.Abs(input) < 0.05f)
         {
             desired = LandState;
             speed = 1.4f;
         }
         else
         {
-            desired = Mathf.Abs(input) > 0.1f ? RunState : IdleState;
+            if (Mathf.Abs(input) > 0.05f)
+            {
+                desired = RunState;
+                speed = 1.25f; // Ritmo ágil e sincronizado com os passos
+            }
+            else
+            {
+                desired = IdleState;
+                speed = 1f;
+            }
         }
 
         PlayAnimation(desired, speed);
@@ -1051,11 +1355,21 @@ public class PlayerBehavior : MonoBehaviour
 
     private void Die()
     {
+        if (action == ActionState.Dead) return;
         action = ActionState.Dead;
-        rb.linearVelocity = Vector2.zero;
+
+        // Para movimentação horizontal, mas deixa a gravidade assentar o corpo no chão se estiver caindo
+        if (rb != null)
+        {
+            rb.linearVelocity = new Vector2(0f, Mathf.Min(0f, rb.linearVelocity.y));
+        }
+
         PlayAnimation(DeathState, 1f, true);
         OnPlayerDeath?.Invoke();
-        Debug.Log("<color=red>[Player]</color> O Cavaleiro tombou em batalha.");
+        Debug.Log("<color=red>[Player]</color> ☠ O Cavaleiro tombou em batalha. Respawn em " + deathRespawnDelay + "s...");
+
+        if (deathRespawnCoroutine != null) StopCoroutine(deathRespawnCoroutine);
+        deathRespawnCoroutine = StartCoroutine(DeathRespawnRoutine());
     }
 
     public void SwitchPolarity()
