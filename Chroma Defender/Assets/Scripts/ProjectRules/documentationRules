@@ -2,28 +2,41 @@
 
 ### Regras de alteração:
 
-Caso haja qualquer alteração nas regras do código como a númeração das layers, padrão de valores, padrão de arquivos e estruturas devem ser registradas aqui e esse arquivo deve ser compartilhado no grupo do whatsapp ou no google drive, sempre avisar quando houve alteração.
-
-Esse arquivo está no formato MarkDown, então para facilitar a leitura, entendimento e escrita utilize esse site: [Link do site para leitura e edição de MarkDown](https://markdownlivepreview.com/).
+Caso haja qualquer alteração nas regras do código como a numeração das layers, padrão de valores, padrão de arquivos e estruturas devem ser registradas aqui e esse arquivo deve ser compartilhado no grupo do whatsapp ou no google drive, sempre avisar quando houve alteração.
 
 Este arquivo deve PERMANECER EM .GITIGNORE
 
 ---
 
-# Layers e cenários
+# Controles & Mecânicas do Player
 
-### Estrutura das Layers:
+- **A / D:** Mover horizontalmente (com aceleração e desaceleração suave).
+- **Espaço:** Pulo único com tolerância de queda (Coyote Time) e sem travamento de pulo infinito.
+- **Botão Esquerdo do Mouse:** Combo de Ataques Leves (1 a 4) com VFX Elemental (Fogo ou Gelo) e danos configuráveis no Inspector.
+- **Botão Direito do Mouse:** Ataque Pesado (1 a 3 golpes configuráveis com danos próprios e maior lunge).
+- **Tecla F ou E:** Ataque Especial / Supremo (Weapon Art multi-hit com tempestade de cortes contínuos e finalizador com explosão de faíscas).
+- **K / Left Shift:** Esquiva / Rolamento: reduz altura física do colisor para 40% e atravessa por debaixo dos inimigos sem colisão durante a execução.
+- **Q / Botão do Meio do Mouse:** Defesa / Parry com o escudo.
+- **TAB ou Tecla C:** Troca de Polaridade Elemental (**Fogo <-> Gelo**).
 
-### _Regras das layers:_
+# Visual e VFX Elemental
+- O corpo do cavaleiro permanece com a armadura escura / preta intacta (`Color.white`), sem tint verde.
+- Modo Fogo: Chamas místicas orbitando suavemente em anel horizontal na altura da cintura (`FireAura`); espada com lâmina original dourada/alaranjada; cortes com arco flamejante e brasas (`FireVFX.cs`).
+- Modo Gelo: Cristais de gelo orbitando estritamente em anel horizontal na altura da cintura (`ElementOrbitAura.cs`), sem partículas soltas ou cristais na parte de cima/cabeça; shader `SpriteElementTint` converte apenas os pixels da lâmina para azul gélido; cortes com arco gélido procedural e impacto congelante no alvo (`IceVFX.cs`).
 
----
-
-# Regras do GitHub:
-
-Sempre crie uma branch separada ao da principal com o nome do criador e número da tarefa (Atrelada no trello), SEMPRE que for criar uma nova branch, crie a partir da main, caso necessite de algo que ainda não está incluida na main, atribua uma tarefa para o kauã dentro do trello usando a tag (MERGE) exemplo:
-
-`git branch` -> Para visualizar a branch atual.
-
-`git checkout -b <Nome da sua branch>` -> Para criar uma nova branch a partir da branch antiga.
-
-Exemplo de nome para branch: _Castro/GAMEPLAY-5_
+# Sistema de Combate e Configuração de Danos
+- **Danos Configuráveis no Inspector do PlayerBehavior:**
+  - Leves: `light1Damage` (20), `light2Damage` (25), `light3Damage` (35), `light4Damage` (50).
+  - Pesados: `heavy1Damage` (50), `heavy2Damage` (70), `heavy3Damage` (95).
+  - Especial: `specialFlurryDamage` (20 por corte), `specialFinisherDamage` (85 no impacto final).
+- **Ataque Especial Multi-Hit:**
+  - Desfere múltiplos golpes rítmicos durante toda a animação com VFX elemental e finaliza com a explosão no chão.
+- **Rolamento com Passagem por Baixo:**
+  - Encolhe colisor e ignora colisão com inimigos temporariamente, restaurando ao término do rolamento.
+- **Combo Contínuo & Knockback Ajustado:**
+  - Golpes iniciais prendem o alvo perto com flinch suave e avanço do cavaleiro (`lunge`).
+  - Finalizadores arremessam o inimigo longe.
+  - Script `TrainingDummy.cs`: Alvo com amortecimento de arrasto (`linearDamping = 14f`), flash elemental e renascimento automático.
+- Menu rápido no topo do Unity:
+  - `Chroma Defender > Criar Boneco de Treino (Alvo de Dano)`
+  - `Chroma Defender > Preparar Player da Cena`
