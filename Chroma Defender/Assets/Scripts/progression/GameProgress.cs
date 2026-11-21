@@ -1,0 +1,87 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// Progresso do jogador que sobrevive à troca de cenas (chaves, chefes derrotados, portões abertos).
+/// Fica só na memória durante a sessão; o Menu Inicial zera tudo ao clicar em "Jogar".
+///
+/// Fluxo planejado:
+///  Fase 1 → derrota o Guardião (boss) → ganha a Chave do Castelo → entra no Castelo (Fase 2)
+///  Fase 2 → encontra a Chave do Poço → volta à Fase 1 → abre o cadeado do Poço → Área Mágica (Fase 3)
+/// </summary>
+public static class GameProgress
+{
+    // --- Identificadores de chaves ---
+    public const string KeyCastelo = "chave_castelo";
+    public const string KeyPoco = "chave_poco";
+
+    // --- Flags de mundo ---
+    public const string FlagBossFase1 = "boss_fase1_derrotado";
+
+    // --- Nomes das cenas ---
+    public const string SceneFase1 = "SampleScene";
+    public const string SceneFase2 = "Fase2_Castelo";
+    public const string SceneFase3 = "Fase3_AreaMagica";
+
+    // --- Pontos de spawn entre cenas ---
+    public const string SpawnFase1Castelo = "fase1_saida_castelo";
+    public const string SpawnFase2Entrada = "fase2_entrada";
+    public const string SpawnFase3Entrada = "fase3_entrada";
+
+    private static readonly HashSet<string> keys = new HashSet<string>();
+    private static readonly HashSet<string> flags = new HashSet<string>();
+
+    /// <summary>Id do SpawnPoint onde o jogador deve aparecer na próxima cena carregada.</summary>
+    public static string PendingSpawnId;
+
+    /// <summary>Disparado quando chaves ou flags mudam (usado pela HUD de progresso).</summary>
+    public static event Action OnChanged;
+
+    public static IEnumerable<string> Keys => keys;
+
+    public static bool HasKey(string keyId) => !string.IsNullOrEmpty(keyId) && keys.Contains(keyId);
+
+    public static void AddKey(string keyId)
+    {
+        if (string.IsNullOrEmpty(keyId) || !keys.Add(keyId)) return;
+        Debug.Log($"<color=gold>[Progresso]</color> Chave obtida: {KeyDisplayName(keyId)}");
+        OnChanged?.Invoke();
+    }
+
+    public static bool HasFlag(string flag) => !string.IsNullOrEmpty(flag) && flags.Contains(flag);
+
+    public static void SetFlag(string flag)
+    {
+        if (string.IsNullOrEmpty(flag) || !flags.Add(flag)) return;
+        OnChanged?.Invoke();
+    }
+
+    public static void ResetProgress()
+    {
+        keys.Clear();
+        flags.Clear();
+        PendingSpawnId = null;
+        OnChanged?.Invoke();
+    }
+
+    public static string KeyDisplayName(string keyId)
+    {
+        switch (keyId)
+        {
+            case KeyCastelo: return "Chave Dourada do Castelo";
+            case KeyPoco: return "Chave de Prata do Poço";
+            default: return keyId;
+        }
+    }
+
+    // Garante estado limpo ao entrar no Play Mode mesmo com "Domain Reload" desativado no Editor.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetOnPlay()
+    {
+        keys.Clear();
+        flags.Clear();
+        PendingSpawnId = null;
+        OnChanged = null;
+    }
+}

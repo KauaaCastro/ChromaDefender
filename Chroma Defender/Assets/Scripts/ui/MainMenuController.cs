@@ -97,6 +97,7 @@ public class MainMenuController : MonoBehaviour
     {
         if (leaving) return;
         leaving = true;
+        GameProgress.ResetProgress(); // novo jogo: zera chaves e chefes derrotados
         if (fade != null) fade.blocksRaycasts = true;
         else SceneManager.LoadScene(gameScene);
     }

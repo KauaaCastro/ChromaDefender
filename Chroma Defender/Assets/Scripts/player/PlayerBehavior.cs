@@ -142,6 +142,10 @@ public class PlayerBehavior : MonoBehaviour
     [Header("--- Caixa de Dano do Ataque (Hitbox) ---")]
     [SerializeField] private Vector2 attackHitboxSize = new Vector2(1.6f, 1.2f);
     [SerializeField] private Vector2 attackHitboxOffset = new Vector2(0.85f, 0.1f);
+    [Tooltip("Multiplica o ALCANCE (largura para a frente) de todos os golpes da espada.")]
+    [SerializeField] private float attackReachMultiplier = 1.6f;
+    [Tooltip("Altura extra acima da cabeça coberta pelos golpes (acerta inimigos maiores/voadores baixos).")]
+    [SerializeField] private float attackExtraHeight = 0.4f;
     [SerializeField] private LayerMask enemyLayers;
 
     [Header("--- Vida, Dano & Respawn ---")]
@@ -1066,7 +1070,7 @@ public class PlayerBehavior : MonoBehaviour
     private void PerformAttackHitbox(AttackType type)
     {
         Vector2 hitboxPos = (Vector2)transform.position + new Vector2(attackHitboxOffset.x * facing, attackHitboxOffset.y);
-        Collider2D[] hits = Physics2D.OverlapBoxAll(hitboxPos, attackHitboxSize, 0f);
+        Collider2D[] hits = OverlapAttackBox(hitboxPos, attackHitboxSize);
 
         int damage = light1Damage;
         float knockbackX = lightKnockbackForce;
@@ -1128,6 +1132,31 @@ public class PlayerBehavior : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Caixa de acerto da espada. A altura é estendida para cobrir do pé à cabeça do cavaleiro,
+    /// senão inimigos baixos (rato, slime pequeno) ficavam abaixo da caixa e não tomavam dano.
+    /// </summary>
+    private Collider2D[] OverlapAttackBox(Vector2 center, Vector2 size)
+    {
+        float minY = center.y - size.y * 0.5f;
+        float maxY = center.y + size.y * 0.5f;
+        if (playerCollider != null)
+        {
+            Bounds b = playerCollider.bounds;
+            minY = Mathf.Min(minY, b.min.y - 0.05f);
+            maxY = Mathf.Max(maxY, b.max.y);
+        }
+        maxY += attackExtraHeight;
+
+        // Alcance maior para a frente: a borda de trás da caixa fica no mesmo lugar, a da frente avança.
+        float width = size.x * Mathf.Max(1f, attackReachMultiplier);
+        float centerX = center.x + facing * (width - size.x) * 0.5f;
+
+        Vector2 boxCenter = new Vector2(centerX, (minY + maxY) * 0.5f);
+        Vector2 boxSize = new Vector2(width, maxY - minY);
+        return Physics2D.OverlapBoxAll(boxCenter, boxSize, 0f);
+    }
+
     private void PerformSpecialFlurryHit(int hitNumber)
     {
         SpawnSlashVFX(AttackType.WeaponArt);
@@ -1136,7 +1165,7 @@ public class PlayerBehavior : MonoBehaviour
         lungeVelocity = facing * 2.0f;
 
         Vector2 hitboxPos = (Vector2)transform.position + new Vector2(attackHitboxOffset.x * facing, attackHitboxOffset.y);
-        Collider2D[] hits = Physics2D.OverlapBoxAll(hitboxPos, attackHitboxSize * 1.25f, 0f);
+        Collider2D[] hits = OverlapAttackBox(hitboxPos, attackHitboxSize * 1.25f);
 
         foreach (var hit in hits)
         {
@@ -1157,7 +1186,7 @@ public class PlayerBehavior : MonoBehaviour
     private void PerformSpecialFinisherHit()
     {
         Vector2 hitboxPos = (Vector2)transform.position + new Vector2(impactOffset.x * facing, impactOffset.y);
-        Collider2D[] hits = Physics2D.OverlapBoxAll(hitboxPos, attackHitboxSize * 1.45f, 0f);
+        Collider2D[] hits = OverlapAttackBox(hitboxPos, attackHitboxSize * 1.45f);
 
         foreach (var hit in hits)
         {
