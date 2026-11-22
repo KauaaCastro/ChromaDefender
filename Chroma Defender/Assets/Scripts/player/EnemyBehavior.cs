@@ -58,6 +58,14 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
     [Tooltip("Intervalo mínimo em segundos entre danos de contato contínuos.")]
     [SerializeField] private float contactDamageCooldown = 0.8f;
 
+    [Header("--- Balanceamento de Combate ---")]
+    [Tooltip("Segundos atordoado depois de levar um golpe: o empurrão funciona, ele não persegue e não causa dano de contato.")]
+    [SerializeField] private float hurtStunTime = 0.45f;
+    [Tooltip("Levar um golpe cancela o ataque que o mob estava preparando.")]
+    [SerializeField] private bool hitInterruptsAttack = true;
+    [Tooltip("Vida devolvida ao jogador quando este mob é derrotado. -1 = automático pelo tipo (Rato 6, Slime 12, Morcego 12, Mímico 20).")]
+    [SerializeField] private int healOnDeath = -1;
+
     [Header("--- Comportamento & Ataque ---")]
     [Tooltip("Se falso (ex: Rato), ele apenas anda de um lado para o outro sem ataque ativo.")]
     [SerializeField] private bool canActivelyAttack = true;
@@ -112,6 +120,8 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
     private float nextAttackTime;
     private float nextContactDamageTime;
     private bool isDead;
+    private float hurtUntil;
+    private Coroutine attackRoutine;
 
     // Propriedades Públicas
     public EnemyType Type => enemyType;
@@ -247,6 +257,15 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
 
             case State.Attacking:
                 // Movimento suspenso durante o golpe ativo
+                break;
+
+            case State.Hurt:
+                // Atordoado: o empurrão do golpe age livremente (FixedUpdate não mexe na velocidade)
+                if (Time.time >= hurtUntil)
+                {
+                    currentState = canActivelyAttack ? State.Chase : State.Patrol;
+                    if (isFlying && rb != null) rb.linearVelocity *= 0.3f;
+                }
                 break;
         }
 
@@ -406,7 +425,7 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
         // Se está ao alcance do golpe ativo e fora de cooldown, ataca!
         if (dist <= attackRange && Time.time >= nextAttackTime)
         {
-            StartCoroutine(ActiveAttackRoutine());
+            attackRoutine = StartCoroutine(ActiveAttackRoutine());
             return;
         }
 
@@ -496,7 +515,7 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
 
     private void TryDealContactDamage(GameObject target)
     {
-        if (isDead || currentState == State.Dead) return;
+        if (isDead || currentState == State.Dead || currentState == State.Hurt) return;
         if (Time.time < nextContactDamageTime) return;
 
         PlayerBehavior player = target.GetComponent<PlayerBehavior>();
@@ -556,6 +575,41 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
         if (currentHealth <= 0)
         {
             Die(attackPolarity);
+            return;
+        }
+
+        EnterHurtStun();
+    }
+
+    /// <summary>
+    /// Atordoamento curto ao levar golpe. Antes, o estado Hurt nunca era usado: a perseguição anulava o empurrão
+    /// no quadro seguinte e o mob continuava colado no jogador, trocando golpe por dano de contato.
+    /// </summary>
+    private void EnterHurtStun()
+    {
+        if (hurtStunTime <= 0f) return;
+
+        if (currentState == State.Attacking)
+        {
+            if (!hitInterruptsAttack) return;
+            if (attackRoutine != null) StopCoroutine(attackRoutine);
+            attackRoutine = null;
+        }
+
+        currentState = State.Hurt;
+        hurtUntil = Time.time + hurtStunTime;
+        nextContactDamageTime = Mathf.Max(nextContactDamageTime, hurtUntil + 0.15f);
+        nextAttackTime = Mathf.Max(nextAttackTime, hurtUntil + 0.35f);
+    }
+
+    private int HealAmount()
+    {
+        if (healOnDeath >= 0) return healOnDeath;
+        switch (enemyType)
+        {
+            case EnemyType.Rat: return 6;
+            case EnemyType.Mimic: return 20;
+            default: return 12; // Slime e Morcego
         }
     }
 
@@ -573,6 +627,19 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
         if (isDead) return;
         isDead = true;
         currentState = State.Dead;
+        if (attackRoutine != null) { StopCoroutine(attackRoutine); attackRoutine = null; }
+
+        // Recompensa: devolve um pouco de vida ao jogador
+        int heal = HealAmount();
+        if (heal > 0)
+        {
+            if (playerBehavior == null) FindPlayer();
+            if (playerBehavior != null && !playerBehavior.IsDead)
+            {
+                int healed = playerBehavior.Heal(heal);
+                if (healed > 0) FloatingText.Spawn(playerBehavior.transform.position + Vector3.up * 1.6f, "+" + healed, new Color(0.45f, 1f, 0.5f));
+            }
+        }
 
         if (col != null) col.enabled = false;
         if (rb != null)

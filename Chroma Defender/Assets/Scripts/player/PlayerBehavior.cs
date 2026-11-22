@@ -55,6 +55,10 @@ public class PlayerBehavior : MonoBehaviour
     [Header("--- Rolamento (Dash/Esquiva) ---")]
     [SerializeField] private float rollSpeed = 6.5f;
     [SerializeField] private float rollCooldown = 0.4f;
+    [Tooltip("Segundos em que o comando de rolar fica guardado se for apertado num momento em que ainda não dá para rolar.")]
+    [SerializeField] private float rollBufferTime = 0.15f;
+    [Tooltip("Permite cancelar o ataque LEVE com o rolamento a qualquer momento do golpe.")]
+    [SerializeField] private bool rollCancelsLightAttack = true;
     [SerializeField] private float rollAnimSpeed = 1.4f;
     [Tooltip("Reduz a altura do colisor durante o rolamento para passar por debaixo de inimigos e obstáculos.")]
     [SerializeField] private bool rollShrinksCollider = true;
@@ -203,6 +207,11 @@ public class PlayerBehavior : MonoBehaviour
     private bool specialQueued;
     private float specialQueuedTime;
     private bool rollQueued;
+    private float rollQueuedTime;
+
+    // Atrito: no ar o colisor fica sem atrito para não "grudar" em paredes e mobs.
+    private PhysicsMaterial2D airMaterial;
+    private PhysicsMaterial2D groundMaterial;
     private float nextRollTime;
     private bool isParryHeld;
     private float invulnerableUntil;
@@ -288,6 +297,18 @@ public class PlayerBehavior : MonoBehaviour
             defaultColliderOffset = playerBoxCollider.offset;
         }
 
+        if (playerCollider != null)
+        {
+            groundMaterial = playerCollider.sharedMaterial;
+            airMaterial = new PhysicsMaterial2D("Player_Air_NoFriction")
+            {
+                friction = 0f,
+                bounciness = 0f,
+                frictionCombine = PhysicsMaterialCombine2D.Minimum,
+                bounceCombine = PhysicsMaterialCombine2D.Minimum
+            };
+        }
+
         jumpBufferTimer = 0f;
         coyoteTimer = 0f;
         jumpLockout = 0.2f;
@@ -304,6 +325,10 @@ public class PlayerBehavior : MonoBehaviour
     private void Start()
     {
         AlignSpawnWithGround();
+
+        // Melhorias de combo vindas de baús continuam valendo em outras cenas
+        if (GameProgress.LightComboHits > unlockedLightHits)
+            unlockedLightHits = Mathf.Clamp(GameProgress.LightComboHits, 2, 4);
 
         var input = GameManager.Instance.InputManager;
         input.OnJump += HandleJumpInput;
@@ -411,7 +436,7 @@ public class PlayerBehavior : MonoBehaviour
         specialQueued = true; 
         specialQueuedTime = Time.time; 
     }
-    private void HandleRollInput() => rollQueued = true;
+    private void HandleRollInput() { rollQueued = true; rollQueuedTime = Time.time; }
     private void HandleParryStart() => isParryHeld = true;
     private void HandleParryEnd() => isParryHeld = false;
     private void HandleSwitchPolarityInput() => SwitchPolarity();
@@ -447,6 +472,7 @@ public class PlayerBehavior : MonoBehaviour
 
         TickTimers(dt);
         UpdateGrounded(dt);
+        UpdateFrictionMaterial();
         UpdateAction(dt);
         ProcessQueues();
         UpdateMovement(moveInput, dt);
@@ -552,6 +578,15 @@ public class PlayerBehavior : MonoBehaviour
             spriteRenderer.color = finalC;
         }
         flashCoroutine = null;
+    }
+
+    private void UpdateFrictionMaterial()
+    {
+        // No chão mantém o atrito normal (não escorrega em rampas); no ar tira o atrito,
+        // senão empurrar contra uma parede ou um mob segura o cavaleiro no lugar.
+        if (playerCollider == null || airMaterial == null) return;
+        PhysicsMaterial2D wanted = isGrounded ? groundMaterial : airMaterial;
+        if (playerCollider.sharedMaterial != wanted) playerCollider.sharedMaterial = wanted;
     }
 
     private void TickTimers(float dt)
@@ -683,14 +718,20 @@ public class PlayerBehavior : MonoBehaviour
             EndAction();
         }
 
-        // 2. Rolamento (Dash)
-        if (rollQueued && isGrounded && canInterrupt && action != ActionState.Roll && Time.time >= nextRollTime)
+        // 2. Rolamento (Dash) — o ataque leve pode ser cancelado a qualquer momento para esquivar
+        bool lightAttack = action == ActionState.Attack &&
+            (currentAttack == AttackType.Light1 || currentAttack == AttackType.Light2 ||
+             currentAttack == AttackType.Light3 || currentAttack == AttackType.Light4);
+        bool canRoll = canInterrupt || (rollCancelsLightAttack && lightAttack);
+        if (rollQueued && isGrounded && canRoll && action != ActionState.Roll && Time.time >= nextRollTime)
         {
             StartRoll();
             rollQueued = false;
+            lightQueued = false;
             return;
         }
-        rollQueued = false;
+        // Guarda o comando por um instante (ex.: apertou um pouco antes de poder rolar)
+        if (rollQueued && Time.time - rollQueuedTime > rollBufferTime) rollQueued = false;
 
         // 3. Pulo
         if (jumpBufferTimer > 0f && coyoteTimer > 0f && canInterrupt && action != ActionState.Roll)
@@ -1351,6 +1392,16 @@ public class PlayerBehavior : MonoBehaviour
     // ------------------------------------------------------------------
     // Sistema de Dano e Morte
     // ------------------------------------------------------------------
+    /// <summary>Cura o cavaleiro (sem passar da vida máxima). Retorna quanto foi realmente curado.</summary>
+    public int Heal(int amount)
+    {
+        if (IsDead || amount <= 0 || currentHealth >= maxHealth) return 0;
+        int before = currentHealth;
+        currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
+        OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        return currentHealth - before;
+    }
+
     public void TakeDamage(int amount, Vector2 knockbackDirection)
     {
         if (IsDead || IsInvulnerable) return;
@@ -1503,6 +1554,8 @@ public class PlayerBehavior : MonoBehaviour
         unlockedHeavyHits = Mathf.Clamp(hitChain, 1, 3);
         Debug.Log($"<color=green>[Progressão]</color> Ataque Pesado desbloqueado! (Cadeia de {unlockedHeavyHits} golpes)");
     }
+
+    public int UnlockedLightHits => unlockedLightHits;
 
     public void UpgradeLightCombo(int hits)
     {

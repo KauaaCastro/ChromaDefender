@@ -42,13 +42,13 @@ public class BossBringer : MonoBehaviour, IDamageableTarget
 
     [Header("--- Golpe de Foice ---")]
     [SerializeField] private int meleeDamage = 22;
-    [Tooltip("Distância (centro a centro) em que o chefe decide dar o golpe de foice.")]
-    [SerializeField] private float meleeTriggerDistance = 1.9f;
-    [Tooltip("Alcance da foice para a frente, medido do centro do chefe. O golpe do cavaleiro alcança ~2.4, então mantenha abaixo disso para dar espaço de ataque.")]
-    [SerializeField] private float meleeReach = 1.7f;
+    [Tooltip("Distância a partir da BORDA do corpo do chefe em que ele decide dar o golpe de foice. Mantenha um pouco menor que scytheReachFromBody.")]
+    [SerializeField] private float scytheTriggerFromBody = 1.8f;
+    [Tooltip("Alcance da foice para a frente, medido a partir da BORDA do corpo do chefe (não do centro).")]
+    [SerializeField] private float scytheReachFromBody = 2.4f;
     [SerializeField] private float meleeHeight = 3.0f;
-    [Tooltip("Velocidade da animação do golpe (menor = mais lento e fácil de esquivar).")]
-    [SerializeField] private float meleeAnimSpeed = 0.65f;
+    [Tooltip("Velocidade da animação do golpe (clipe de 1 s). Menor = mais lento e mais tempo para reagir. 0.6 → golpe de ~1.7 s, dano em ~1 s.")]
+    [SerializeField] private float scytheAnimSpeed = 0.6f;
     [Tooltip("Momento do dano dentro da animação do golpe (0 = início, 1 = fim). O golpe toca UMA vez e o dano acontece neste ponto, seja qual for a velocidade.")]
     [Range(0.05f, 0.95f)]
     [SerializeField] private float meleeHitPoint = 0.6f;
@@ -202,10 +202,11 @@ public class BossBringer : MonoBehaviour, IDamageableTarget
             case State.Idle:
             case State.Chase:
                 FaceTowards(dx);
-                if (Time.time >= nextSpellTime && (dist > meleeTriggerDistance * 1.5f || Random.value < spellChanceWhenClose * Time.deltaTime * 4f))
+                float trigger = MeleeTriggerDistance;
+                if (Time.time >= nextSpellTime && (dist > trigger * 1.5f || Random.value < spellChanceWhenClose * Time.deltaTime * 4f))
                     StartCast();
-                else if (dist <= meleeTriggerDistance && Time.time >= nextMeleeTime) StartMelee();
-                else if (dist > meleeTriggerDistance * 0.85f) { state = State.Chase; Play("Walk"); }
+                else if (dist <= trigger && Time.time >= nextMeleeTime) StartMelee();
+                else if (dist > trigger * 0.85f) { state = State.Chase; Play("Walk"); }
                 else { state = State.Idle; Play("Idle"); }
                 break;
 
@@ -270,7 +271,7 @@ public class BossBringer : MonoBehaviour, IDamageableTarget
         state = State.Melee;
         stateTimer = 0f;
         meleeHitDone = false;
-        float speed = Mathf.Max(0.1f, meleeAnimSpeed);
+        float speed = Mathf.Max(0.1f, scytheAnimSpeed);
         // Duração = exatamente UMA passada da animação de ataque (o clipe é em loop, então não pode passar disso).
         currentMeleeLength = AttackClipLength() / speed;
         nextMeleeTime = Time.time + currentMeleeLength + meleeRestTime * (Enraged ? enragedRestMultiplier : 1f);
@@ -300,10 +301,13 @@ public class BossBringer : MonoBehaviour, IDamageableTarget
         Play("Cast", true);
     }
 
+    // Alcance e gatilho medidos a partir da borda do corpo, convertidos para distância a partir do centro.
+    private float MeleeReach => bodyWidth * 0.5f + Mathf.Max(0.3f, scytheReachFromBody);
+    private float MeleeTriggerDistance => bodyWidth * 0.5f + Mathf.Max(0.2f, scytheTriggerFromBody);
+
     private void DoMeleeHit()
     {
-        // A foice sempre passa um pouco da borda do corpo (senão, com corpo largo, ela nunca alcançaria o cavaleiro).
-        float reach = Mathf.Max(meleeReach, bodyWidth * 0.5f + 0.5f);
+        float reach = MeleeReach;
         Vector2 size = new Vector2(reach, meleeHeight);
         Vector2 center = (Vector2)transform.position + new Vector2(facing * reach * 0.5f, meleeHeight * 0.5f);
         foreach (var hit in Physics2D.OverlapBoxAll(center, size, 0f))
@@ -555,7 +559,7 @@ public class BossBringer : MonoBehaviour, IDamageableTarget
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.red;
-        float reach = Mathf.Max(meleeReach, bodyWidth * 0.5f + 0.5f);
+        float reach = MeleeReach;
         Gizmos.DrawWireCube(transform.position + new Vector3(facing * reach * 0.5f, meleeHeight * 0.5f), new Vector3(reach, meleeHeight, 0f));
         Gizmos.color = Color.yellow;
         Gizmos.DrawLine(new Vector3(arenaMinX, transform.position.y, 0), new Vector3(arenaMaxX, transform.position.y, 0));

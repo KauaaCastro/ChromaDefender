@@ -183,6 +183,9 @@ MonoBehaviour:
   attackKnockback: 5
   attackKnockbackY: 2.2
   contactDamageCooldown: 0.8
+  hurtStunTime: 0.45
+  hitInterruptsAttack: 1
+  healOnDeath: -1
   canActivelyAttack: 1
   detectionRadius: 5
   attackRange: 1.4

@@ -49,6 +49,9 @@ public class EnemyRespawnManager : MonoBehaviour
             var template = Instantiate(enemy.gameObject, templateHolder);
             template.name = enemy.gameObject.name;
             CleanRuntimeLeftovers(template);
+            // Inimigos colocados DENTRO de outro inimigo na Hierarchy ganham a própria "foto".
+            // Se ficassem também dentro da foto do pai, nasceriam duas vezes a cada respawn.
+            RemoveNestedEnemies(template);
 
             entries.Add(new Entry
             {
@@ -56,7 +59,9 @@ public class EnemyRespawnManager : MonoBehaviour
                 position = t.position,
                 rotation = t.rotation,
                 scale = t.lossyScale,
-                parent = t.parent
+                // O inimigo se solta de um pai que seja inimigo ao acordar (EnemyBehavior.Awake); aqui fazemos o mesmo,
+                // e também evita usar como pai um objeto que será destruído no respawn.
+                parent = HasEnemyAncestor(t) ? null : t.parent
             });
         }
     }
@@ -99,12 +104,31 @@ public class EnemyRespawnManager : MonoBehaviour
         }
     }
 
+    private static void RemoveNestedEnemies(GameObject template)
+    {
+        foreach (var nested in template.GetComponentsInChildren<EnemyBehavior>(true))
+        {
+            if (nested == null) continue; // já removido junto com um inimigo de nível acima
+            if (nested.gameObject != template) DestroyImmediate(nested.gameObject);
+        }
+    }
+
+    private static bool HasEnemyAncestor(Transform t)
+    {
+        for (var p = t.parent; p != null; p = p.parent)
+        {
+            if (p.GetComponent<EnemyBehavior>() != null || p.name.Contains("Enemy")) return true;
+        }
+        return false;
+    }
+
     /// <summary>Remove HUD de polaridade criado em tempo de execução (o inimigo recria o dele ao acordar).</summary>
     private static void CleanRuntimeLeftovers(GameObject template)
     {
-        foreach (Transform child in template.transform)
+        foreach (var child in template.GetComponentsInChildren<Transform>(true))
         {
-            if (child.name == "Polarity_HUD") Destroy(child.gameObject);
+            if (child != null && (child.name == "Polarity_HUD" || child.name == "Polarity_Outline"))
+                Destroy(child.gameObject);
         }
         var hud = template.GetComponent<EnemyPolarityHUD>();
         if (hud != null) Destroy(hud);

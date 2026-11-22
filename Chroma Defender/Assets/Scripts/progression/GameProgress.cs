@@ -38,6 +38,16 @@ public static class GameProgress
     /// <summary>Disparado quando chaves ou flags mudam (usado pela HUD de progresso).</summary>
     public static event Action OnChanged;
 
+    /// <summary>Golpes do combo leve liberados por baús/itens (0 = nenhuma melhoria). O jogador aplica ao entrar na cena.</summary>
+    public static int LightComboHits { get; private set; }
+
+    public static void UnlockLightCombo(int hits)
+    {
+        if (hits <= LightComboHits) return;
+        LightComboHits = hits;
+        OnChanged?.Invoke();
+    }
+
     public static IEnumerable<string> Keys => keys;
 
     public static bool HasKey(string keyId) => !string.IsNullOrEmpty(keyId) && keys.Contains(keyId);
@@ -61,6 +71,7 @@ public static class GameProgress
     {
         keys.Clear();
         flags.Clear();
+        LightComboHits = 0;
         PendingSpawnId = null;
         OnChanged?.Invoke();
     }
@@ -81,6 +92,7 @@ public static class GameProgress
     {
         keys.Clear();
         flags.Clear();
+        LightComboHits = 0;
         PendingSpawnId = null;
         OnChanged = null;
     }

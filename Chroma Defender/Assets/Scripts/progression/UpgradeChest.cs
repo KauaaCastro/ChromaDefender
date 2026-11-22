@@ -1,0 +1,157 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+/// <summary>
+/// Baú de melhoria. O jogador chega perto e aperta W / ↑ (ou só encosta, se "openOnTouch" estiver ligado).
+/// O baú toca a animação de abrir e, no fim dela, melhora o combo de ataque leve do cavaleiro.
+///
+/// Usa o Animator dos baús do pacote Cainos (parâmetro bool "IsOpened", estados Closed → Open → Opened).
+/// Fica registrado em GameProgress: depois de aberto, continua aberto ao morrer, ao trocar de cena e ao voltar.
+/// </summary>
+[RequireComponent(typeof(Collider2D))]
+public class UpgradeChest : MonoBehaviour
+{
+    [Header("--- Identificação ---")]
+    [Tooltip("Id único deste baú. Dois baús com o mesmo id contam como o mesmo baú.")]
+    [SerializeField] private string chestId = "bau_combo_leve_3";
+
+    [Header("--- Recompensa ---")]
+    [Tooltip("Quantidade de golpes do combo de ataque leve liberada (3 = terceiro golpe, 4 = quarto golpe).")]
+    [Range(2, 4)]
+    [SerializeField] private int lightComboHits = 3;
+    [SerializeField] private string rewardTitle = "Combo Leve — 3º golpe";
+    [SerializeField] private string rewardDescription = "Seu ataque rápido agora encadeia 3 golpes!";
+
+    [Header("--- Interação ---")]
+    [Tooltip("Abre sozinho ao encostar, sem apertar nada.")]
+    [SerializeField] private bool openOnTouch = false;
+    [SerializeField] private string promptText = "[W] Abrir baú";
+    [Tooltip("Altura do aviso \"Abrir baú\" acima da base do baú.")]
+    [SerializeField] private float promptHeight = 1.6f;
+
+    [Header("--- Referências ---")]
+    [SerializeField] private Animator animator;
+
+    private const string OpenedParam = "IsOpened";
+    private const string OpenedState = "Opened";
+
+    private bool playerInRange;
+    private bool opening;
+    private bool opened;
+    private PlayerBehavior player;
+    private GUIStyle promptStyle;
+
+    private string FlagId => "bau_aberto_" + chestId;
+
+    private void Reset()
+    {
+        GetComponent<Collider2D>().isTrigger = true;
+        animator = GetComponent<Animator>();
+    }
+
+    private void Awake()
+    {
+        if (animator == null) animator = GetComponent<Animator>();
+        GetComponent<Collider2D>().isTrigger = true;
+    }
+
+    private void Start()
+    {
+        if (GameProgress.HasFlag(FlagId))
+        {
+            // Já aberto antes (outra vida ou outra visita à cena): fica aberto e sem interação.
+            opened = true;
+            if (animator != null)
+            {
+                animator.SetBool(OpenedParam, true);
+                animator.Play(OpenedState, 0, 1f);
+            }
+        }
+    }
+
+    private void Update()
+    {
+        if (opened || opening || !playerInRange) return;
+
+        var kb = Keyboard.current;
+        bool pressed = kb != null && (kb.wKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame);
+        if (openOnTouch || pressed) StartCoroutine(OpenRoutine());
+    }
+
+    private IEnumerator OpenRoutine()
+    {
+        opening = true;
+        GameProgress.SetFlag(FlagId);
+
+        if (animator != null) animator.SetBool(OpenedParam, true);
+        yield return new WaitForSeconds(OpenClipLength());
+
+        GiveReward();
+        opening = false;
+        opened = true;
+    }
+
+    private void GiveReward()
+    {
+        GameProgress.UnlockLightCombo(lightComboHits);
+
+        if (player == null) player = FindAnyObjectByType<PlayerBehavior>();
+        if (player != null && player.UnlockedLightHits < lightComboHits)
+            player.UpgradeLightCombo(lightComboHits);
+
+        Vector3 top = transform.position + Vector3.up * 0.7f;
+        FireVFX.SpawnFlameBurst(top, 22);
+        ProgressHud.Toast($"Baú aberto! <color=#FFD54A>{rewardTitle}</color>\n{rewardDescription}", 4.5f);
+    }
+
+    private float OpenClipLength()
+    {
+        if (animator != null && animator.runtimeAnimatorController != null)
+        {
+            foreach (var clip in animator.runtimeAnimatorController.animationClips)
+                if (clip != null && clip.name.EndsWith("- Open")) return clip.length;
+        }
+        return 0.5f;
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        var p = other.GetComponentInParent<PlayerBehavior>();
+        if (p == null) return;
+        player = p;
+        playerInRange = true;
+    }
+
+    private void OnTriggerExit2D(Collider2D other)
+    {
+        if (other.GetComponentInParent<PlayerBehavior>() != null) playerInRange = false;
+    }
+
+    private void OnGUI()
+    {
+        if (opened || opening || openOnTouch || !playerInRange) return;
+        var cam = Camera.main;
+        if (cam == null) return;
+
+        Vector3 screen = cam.WorldToScreenPoint(transform.position + Vector3.up * promptHeight);
+        if (screen.z < 0f) return;
+
+        if (promptStyle == null)
+        {
+            promptStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 16,
+                fontStyle = FontStyle.Bold
+            };
+        }
+
+        var rect = new Rect(screen.x - 80f, Screen.height - screen.y - 14f, 160f, 28f);
+        // Sombra para ler em qualquer fundo
+        promptStyle.normal.textColor = new Color(0f, 0f, 0f, 0.85f);
+        GUI.Label(new Rect(rect.x + 1.5f, rect.y + 1.5f, rect.width, rect.height), promptText, promptStyle);
+        promptStyle.normal.textColor = new Color(1f, 0.84f, 0.3f);
+        GUI.Label(rect, promptText, promptStyle);
+    }
+}

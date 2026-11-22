@@ -10,8 +10,8 @@ public class EnemyPolarityHUD : MonoBehaviour
     private EnemyBehavior enemy;
     private GameObject hudRoot;
     private SpriteRenderer iconRenderer;
-    private TextMesh promptText;
     private SpriteRenderer barBgRenderer;
+    private const float hudGap = 0.18f; // distância entre a cabeça do mob e a barra
     private SpriteRenderer barFillRenderer;
 
     private float baseFillWidth = 0.85f;
@@ -68,30 +68,17 @@ public class EnemyPolarityHUD : MonoBehaviour
 
         hudRoot.transform.localPosition = new Vector3(0f, headOffset, 0f);
 
-        // 1. Ícone Elemental (Chama de Fogo ou Cristal de Gelo)
+        // 1. Ícone Elemental pequeno, à esquerda da barra de vida (Chama de Fogo ou Cristal de Gelo)
         GameObject iconObj = new GameObject("Elemental_Icon");
         iconObj.transform.SetParent(hudRoot.transform, false);
-        iconObj.transform.localPosition = new Vector3(0f, 0.28f, 0f);
-        iconObj.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
+        iconObj.transform.localPosition = new Vector3(-baseFillWidth * 0.5f - 0.2f, 0.05f, 0f);
+        iconObj.transform.localScale = new Vector3(0.6f, 0.6f, 1f);
 
         iconRenderer = iconObj.AddComponent<SpriteRenderer>();
         iconRenderer.sortingOrder = 30;
 
-        // 2. Texto de Instrução ("USE FOGO" ou "USE GELO")
-        GameObject textObj = new GameObject("Prompt_Text");
-        textObj.transform.SetParent(hudRoot.transform, false);
-        textObj.transform.localPosition = new Vector3(0f, 0.52f, 0f);
-
-        promptText = textObj.AddComponent<TextMesh>();
-        promptText.alignment = TextAlignment.Center;
-        promptText.anchor = TextAnchor.MiddleCenter;
-        promptText.characterSize = 0.065f;
-        promptText.fontSize = 28;
-        promptText.fontStyle = FontStyle.Bold;
-
-        // MeshRenderer sorting order para ficar acima de sprites
-        MeshRenderer mr = textObj.GetComponent<MeshRenderer>();
-        if (mr != null) mr.sortingOrder = 32;
+        // 2. Contorno colorido no próprio mob, na cor do elemento que o jogador deve usar
+        BuildOutline();
 
         // 3. Barra de Vida (Fundo Escuro)
         EnsureBarSprite();
@@ -128,61 +115,103 @@ public class EnemyPolarityHUD : MonoBehaviour
 
         if (!required.HasValue)
         {
-            // Inimigo NEUTRO -> Qualquer ataque funciona
+            // Inimigo NEUTRO -> Qualquer ataque funciona (sem contorno colorido)
             if (iconRenderer != null)
             {
                 iconRenderer.sprite = neutralIconSprite;
                 iconRenderer.color = new Color(1f, 1f, 1f, 0.85f);
             }
-            if (promptText != null)
-            {
-                promptText.text = "NEUTRO";
-                promptText.color = new Color(0.9f, 0.9f, 0.9f, 0.9f);
-            }
-            if (barFillRenderer != null)
-            {
-                barFillRenderer.color = new Color(0.25f, 0.85f, 0.45f, 1f); // Verde clássico
-            }
+            if (barFillRenderer != null) barFillRenderer.color = new Color(0.25f, 0.85f, 0.45f, 1f); // Verde clássico
+            outlineColor = Color.clear;
             return;
         }
 
-        if (required.Value == ElementPolarity.Fire)
+        // Tudo na cor do elemento que o jogador DEVE usar: ícone, barra de vida e contorno do mob.
+        bool useFire = required.Value == ElementPolarity.Fire;
+        Color c = useFire ? FireColor : IceColor;
+        if (iconRenderer != null)
         {
-            // Jogador DEVE USAR FOGO!
-            if (iconRenderer != null)
-            {
-                iconRenderer.sprite = fireIconSprite;
-                iconRenderer.color = Color.white;
-            }
-            if (promptText != null)
-            {
-                promptText.text = "USE FOGO";
-                promptText.color = new Color(1f, 0.45f, 0.1f, 1f); // Laranja fogo brilhante
-            }
-            if (barFillRenderer != null)
-            {
-                // Vida com tom do mob (se fraqueza é Fogo, inimigo é Gelo)
-                barFillRenderer.color = (enemy.Polarity == EnemyPolarityType.Ice) ? new Color(0.35f, 0.85f, 1f, 1f) : new Color(1f, 0.5f, 0.2f, 1f);
-            }
+            iconRenderer.sprite = useFire ? fireIconSprite : iceIconSprite;
+            iconRenderer.color = Color.white;
         }
-        else // ElementPolarity.Ice
+        if (barFillRenderer != null) barFillRenderer.color = c;
+        outlineColor = c;
+    }
+
+    // ------------------------------------------------------------------
+    // Contorno colorido (4 cópias do sprite, deslocadas 1 pixel, pintadas de cor sólida)
+    // ------------------------------------------------------------------
+    private static readonly Color FireColor = new Color(1f, 0.45f, 0.1f, 1f);
+    private static readonly Color IceColor = new Color(0.25f, 0.85f, 1f, 1f);
+    private static readonly Vector2[] OutlineDirs = { Vector2.right, Vector2.left, Vector2.up, Vector2.down };
+    private static Material outlineMaterial;
+
+    private GameObject outlineRoot;
+    private SpriteRenderer[] outlineRenderers;
+    private SpriteRenderer bodyRenderer;
+    private Color outlineColor = Color.clear;
+    private PlayerBehavior player;
+
+    private void BuildOutline()
+    {
+        if (outlineRoot != null) Destroy(outlineRoot);
+        outlineRenderers = null;
+
+        bodyRenderer = GetComponent<SpriteRenderer>();
+        if (bodyRenderer == null) bodyRenderer = GetComponentInChildren<SpriteRenderer>();
+        if (bodyRenderer == null) return;
+
+        if (outlineMaterial == null)
         {
-            // Jogador DEVE USAR GELO!
-            if (iconRenderer != null)
-            {
-                iconRenderer.sprite = iceIconSprite;
-                iconRenderer.color = Color.white;
-            }
-            if (promptText != null)
-            {
-                promptText.text = "USE GELO";
-                promptText.color = new Color(0.2f, 0.9f, 1f, 1f); // Ciano gélido brilhante
-            }
-            if (barFillRenderer != null)
-            {
-                // Vida com tom do mob (se fraqueza é Gelo, inimigo é Fogo)
-                barFillRenderer.color = (enemy.Polarity == EnemyPolarityType.Fire) ? new Color(1f, 0.5f, 0.2f, 1f) : new Color(0.35f, 0.85f, 1f, 1f);
-            }
+            // Shader que pinta o formato do sprite com uma cor sólida (o mesmo usado pelo TextMesh, então sempre vai no build).
+            Shader solid = Shader.Find("GUI/Text Shader");
+            if (solid == null) return;
+            outlineMaterial = new Material(solid) { name = "Enemy_Outline" };
+        }
+
+        outlineRoot = new GameObject("Polarity_Outline");
+        outlineRoot.transform.SetParent(bodyRenderer.transform, false);
+
+        outlineRenderers = new SpriteRenderer[OutlineDirs.Length];
+        for (int i = 0; i < OutlineDirs.Length; i++)
+        {
+            var go = new GameObject("Outline_" + i);
+            go.transform.SetParent(outlineRoot.transform, false);
+            var r = go.AddComponent<SpriteRenderer>();
+            r.sharedMaterial = outlineMaterial;
+            r.sortingLayerID = bodyRenderer.sortingLayerID;
+            r.sortingOrder = bodyRenderer.sortingOrder - 1;
+            outlineRenderers[i] = r;
+        }
+    }
+
+    private void UpdateOutline()
+    {
+        if (outlineRenderers == null || bodyRenderer == null) return;
+
+        bool visible = outlineColor.a > 0f && bodyRenderer.enabled && bodyRenderer.sprite != null;
+        outlineRoot.SetActive(visible);
+        if (!visible) return;
+
+        // Mais forte e pulsando quando o jogador já está com o elemento certo; mais fraco quando está errado.
+        if (player == null) player = FindAnyObjectByType<PlayerBehavior>();
+        ElementPolarity? required = enemy.RequiredAttackPolarity;
+        bool playerMatches = player != null && required.HasValue && player.CurrentPolarity == required.Value;
+        float alpha = playerMatches ? 0.75f + Mathf.Sin(Time.time * 8f) * 0.25f : 0.55f;
+        Color c = outlineColor;
+        c.a = alpha * bodyRenderer.color.a; // some junto no fade da morte
+
+        Sprite s = bodyRenderer.sprite;
+        float px = 1f / Mathf.Max(1f, s.pixelsPerUnit);
+        for (int i = 0; i < outlineRenderers.Length; i++)
+        {
+            var r = outlineRenderers[i];
+            r.sprite = s;
+            r.flipX = bodyRenderer.flipX;
+            r.flipY = bodyRenderer.flipY;
+            r.color = c;
+            r.sortingOrder = bodyRenderer.sortingOrder - 1;
+            r.transform.localPosition = OutlineDirs[i] * px;
         }
     }
 
@@ -207,6 +236,8 @@ public class EnemyPolarityHUD : MonoBehaviour
     {
         if (hudRoot == null || enemy == null) return;
 
+        UpdateOutline();
+
         if (enemy.IsDead)
         {
             hudRoot.SetActive(false);
@@ -214,25 +245,27 @@ public class EnemyPolarityHUD : MonoBehaviour
         }
 
         // Flutuação rítmica sutil
-        bobOffset = Mathf.Sin(Time.time * 3f) * 0.04f;
+        bobOffset = Mathf.Sin(Time.time * 3f) * 0.03f;
 
-        // Calcula o topo exato do inimigo em espaço de mundo (independente de escala ou colisor)
-        SpriteRenderer sr = GetComponent<SpriteRenderer>();
-        if (sr == null) sr = GetComponentInChildren<SpriteRenderer>();
+        // Topo do CORPO do inimigo. O colisor vem primeiro: os sprites têm muito espaço vazio acima do monstro,
+        // então usar o topo do sprite deixava o indicador longe da cabeça.
+        SpriteRenderer sr = bodyRenderer != null ? bodyRenderer : GetComponentInChildren<SpriteRenderer>();
         Collider2D col = GetComponent<Collider2D>();
 
         float worldTopY = transform.position.y + 0.6f;
-        if (sr != null && sr.bounds.size.y > 0.05f)
+        float centerX = transform.position.x;
+        if (col != null && col.enabled && col.bounds.size.y > 0.05f)
+        {
+            worldTopY = col.bounds.max.y;
+            centerX = col.bounds.center.x;
+        }
+        else if (sr != null && sr.bounds.size.y > 0.05f)
         {
             worldTopY = sr.bounds.max.y;
         }
-        else if (col != null && col.bounds.size.y > 0.05f)
-        {
-            worldTopY = col.bounds.max.y;
-        }
 
-        // Posiciona o HUD diretamente no espaço de mundo exatamente acima da cabeça do monstro
-        hudRoot.transform.position = new Vector3(transform.position.x, worldTopY + 0.35f + bobOffset, transform.position.z);
+        // Posiciona o HUD logo acima da cabeça do monstro
+        hudRoot.transform.position = new Vector3(centerX, worldTopY + hudGap + bobOffset, transform.position.z);
         hudRoot.transform.rotation = Quaternion.identity;
 
         // Compensa a escala do pai para que o HUD mantenha tamanho 100% nítido e constante em QUALQUER monstro (Rato, Slime, Morcego, etc.)
@@ -245,6 +278,7 @@ public class EnemyPolarityHUD : MonoBehaviour
     private void OnDestroy()
     {
         if (hudRoot != null) Destroy(hudRoot);
+        if (outlineRoot != null) Destroy(outlineRoot);
     }
 
     // ------------------------------------------------------------------
