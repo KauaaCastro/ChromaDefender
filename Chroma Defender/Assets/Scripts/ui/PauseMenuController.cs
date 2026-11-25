@@ -273,7 +273,15 @@ public class PauseMenuController : MonoBehaviour
     // ------------------------------------------------------------------
     public void EnsureUI()
     {
-        if (rootGroup != null && mainPanel != null && controlsPanel != null) return;
+        if (rootGroup != null && mainPanel != null && controlsPanel != null)
+        {
+            var firstKey = controlsPanel.Find("Linha_0/Tecla")?.GetComponent<Text>();
+            if (mainPanel.sizeDelta.x >= 880f && firstKey != null && firstKey.text == "TECLAS  A  /  D") return;
+            for (int i = transform.childCount - 1; i >= 0; i--)
+                DestroyImmediate(transform.GetChild(i).gameObject);
+            mainPanel = null;
+            controlsPanel = null;
+        }
 
         uiFont = LoadBestFont();
 
@@ -308,7 +316,7 @@ public class PauseMenuController : MonoBehaviour
 
     private void BuildMainPausePanel()
     {
-        mainPanel = NewRect("PainelPrincipal", transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(780f, 760f));
+        mainPanel = NewRect("PainelPrincipal", transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(900f, 760f));
         var outerBorder = mainPanel.gameObject.AddComponent<Image>();
         outerBorder.color = new Color(0.35f, 0.82f, 1f, 0.45f);
 
@@ -318,16 +326,17 @@ public class PauseMenuController : MonoBehaviour
         var innerImg = inner.gameObject.AddComponent<Image>();
         innerImg.color = new Color(0.05f, 0.06f, 0.12f, 0.96f);
 
-        // Ícones decorativos de Fogo e Gelo ao lado do título
-        CreateElementMedal("MedalhaoFogo", mainPanel, new Vector2(-260f, 275f), HudSprites.Flame, FireColor);
-        CreateElementMedal("MedalhaoGelo", mainPanel, new Vector2(260f, 275f), HudSprites.Ice, IceColor);
+        // Ícones decorativos de Fogo e Gelo bem afastados do título para não encostar nas letras
+        CreateElementMedal("MedalhaoFogo", mainPanel, new Vector2(-345f, 275f), HudSprites.Flame, FireColor);
+        CreateElementMedal("MedalhaoGelo", mainPanel, new Vector2(345f, 275f), HudSprites.Ice, IceColor);
 
-        titleText = NewText("TituloPausa", mainPanel, "JOGO PAUSADO", 76, FireColor);
-        SetRect(titleText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 275f), new Vector2(600f, 95f));
-        AddShadow(titleText.gameObject, new Color(0f, 0.04f, 0.12f, 0.9f));
+        titleText = NewText("TituloPausa", mainPanel, "JOGO PAUSADO", 64, FireColor, useOutline: false);
+        SetRect(titleText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 275f), new Vector2(560f, 90f));
+        AddShadow(titleText.gameObject, new Color(0f, 0.04f, 0.12f, 0.95f), new Vector2(5f, -5f));
 
-        var sub = NewText("SubtituloPausa", mainPanel, "PRESSIONE [ESC] OU [P] PARA RETORNAR À BATALHA", 22, new Color(0.82f, 0.88f, 1f, 0.8f));
-        SetRect(sub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 200f), new Vector2(700f, 36f));
+        var sub = NewText("SubtituloPausa", mainPanel, "PRESSIONE ESC OU P PARA RETORNAR", 30, new Color(0.92f, 0.96f, 1f, 0.95f), useOutline: false);
+        SetRect(sub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 195f), new Vector2(780f, 44f));
+        AddShadow(sub.gameObject, new Color(0f, 0f, 0f, 0.95f), new Vector2(2f, -2f));
 
         resumeButton = NewButton("BotaoContinuar", mainPanel, "CONTINUAR", new Vector2(0f, 95f), IceColor);
         controlsButton = NewButton("BotaoControles", mainPanel, "CONTROLES", new Vector2(0f, -20f), GoldColor);
@@ -339,7 +348,7 @@ public class PauseMenuController : MonoBehaviour
 
     private void BuildControlsSubPanel()
     {
-        controlsPanel = NewRect("PainelControles", transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(980f, 820f));
+        controlsPanel = NewRect("PainelControles", transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1180f, 890f));
         var outerBorder = controlsPanel.gameObject.AddComponent<Image>();
         outerBorder.color = new Color(1f, 0.84f, 0.28f, 0.55f);
 
@@ -349,53 +358,55 @@ public class PauseMenuController : MonoBehaviour
         var innerImg = inner.gameObject.AddComponent<Image>();
         innerImg.color = new Color(0.05f, 0.06f, 0.12f, 0.97f);
 
-        var header = NewText("TituloControles", controlsPanel, "COMANDOS DO CAVALEIRO", 56, GoldColor);
-        SetRect(header.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 330f), new Vector2(880f, 75f));
-        AddShadow(header.gameObject, new Color(0f, 0f, 0f, 0.9f));
+        var header = NewText("TituloControles", controlsPanel, "COMANDOS DO CAVALEIRO", 58, GoldColor, useOutline: false);
+        SetRect(header.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 365f), new Vector2(1040f, 80f));
+        AddShadow(header.gameObject, new Color(0f, 0f, 0f, 0.95f), new Vector2(5f, -5f));
 
         string[,] bindings =
         {
-            { "MOVER CAVALEIRO", "A / D  ou  SETAS ← →" },
-            { "PULAR", "ESPAÇO" },
-            { "ATAQUE LEVE (COMBO)", "BOTÃO ESQUERDO DO MOUSE" },
-            { "ATAQUE PESADO", "BOTÃO DIREITO DO MOUSE" },
-            { "ATAQUE ESPECIAL (SUPREMO)", "TECLA F  ou  E" },
-            { "ROLAMENTO / ESQUIVA", "SHIFT ESQUERDO  ou  K" },
-            { "BLOQUEIO / PARRY", "TECLA Q  ou  BOTÃO DO MEIO" },
-            { "TROCAR POLARIDADE (FOGO / GELO)", "TAB  ou  TECLA C" },
-            { "INTERAGIR / ABRIR BAÚ", "TECLA W  ou  SETA ↑" },
-            { "PAUSAR / RETOMAR JOGO", "ESC  ou  TECLA P" }
+            { "MOVER CAVALEIRO", "TECLAS  A  /  D" },
+            { "PULAR", "ESPACO" },
+            { "ATAQUE LEVE (COMBO)", "CLIQUE ESQUERDO" },
+            { "ATAQUE PESADO", "CLIQUE DIREITO" },
+            { "ATAQUE ESPECIAL", "TECLA F   OU   E" },
+            { "ROLAMENTO / ESQUIVA", "SHIFT   OU   TECLA K" },
+            { "BLOQUEIO / PARRY", "TECLA Q   OU   MEIO DO MOUSE" },
+            { "TROCAR FOGO / GELO", "TAB   OU   TECLA C" },
+            { "ABRIR BAU / INTERAGIR", "TECLA W" },
+            { "PAUSAR / RETOMAR JOGO", "ESC   OU   TECLA P" }
         };
 
-        float startY = 235f;
-        float rowStep = 48f;
+        float startY = 265f;
+        float rowStep = 54f;
         for (int i = 0; i < bindings.GetLength(0); i++)
         {
             float y = startY - i * rowStep;
-            var row = NewRect($"Linha_{i}", controlsPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, y), new Vector2(860f, 40f));
+            var row = NewRect($"Linha_{i}", controlsPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, y), new Vector2(1060f, 46f));
             var rowBg = row.gameObject.AddComponent<Image>();
             rowBg.color = (i % 2 == 0)
-                ? new Color(0.09f, 0.11f, 0.19f, 0.78f)
-                : new Color(0.06f, 0.08f, 0.14f, 0.58f);
+                ? new Color(0.09f, 0.12f, 0.20f, 0.85f)
+                : new Color(0.06f, 0.08f, 0.14f, 0.65f);
             rowBg.raycastTarget = false;
 
-            var actionTxt = NewText("Acao", row, bindings[i, 0], 22, new Color(0.92f, 0.95f, 1f));
+            var actionTxt = NewText("Acao", row, bindings[i, 0], 32, Color.white, useOutline: false);
             actionTxt.alignment = TextAnchor.MiddleLeft;
             actionTxt.rectTransform.anchorMin = new Vector2(0f, 0f);
-            actionTxt.rectTransform.anchorMax = new Vector2(0.55f, 1f);
-            actionTxt.rectTransform.offsetMin = new Vector2(22f, 0f);
+            actionTxt.rectTransform.anchorMax = new Vector2(0.52f, 1f);
+            actionTxt.rectTransform.offsetMin = new Vector2(26f, 0f);
             actionTxt.rectTransform.offsetMax = Vector2.zero;
+            AddShadow(actionTxt.gameObject, new Color(0f, 0f, 0f, 0.95f), new Vector2(2f, -2f));
 
-            Color keyColor = (i == 7) ? IceColor : ((i == 2 || i == 3 || i == 4) ? FireColor : GoldColor);
-            var keyTxt = NewText("Tecla", row, bindings[i, 1], 22, keyColor);
+            Color keyColor = (i == 7) ? IceColor : ((i == 2 || i == 3 || i == 4) ? new Color(1f, 0.52f, 0.22f) : GoldColor);
+            var keyTxt = NewText("Tecla", row, bindings[i, 1], 32, keyColor, useOutline: false);
             keyTxt.alignment = TextAnchor.MiddleRight;
-            keyTxt.rectTransform.anchorMin = new Vector2(0.55f, 0f);
+            keyTxt.rectTransform.anchorMin = new Vector2(0.52f, 0f);
             keyTxt.rectTransform.anchorMax = new Vector2(1f, 1f);
             keyTxt.rectTransform.offsetMin = Vector2.zero;
-            keyTxt.rectTransform.offsetMax = new Vector2(-22f, 0f);
+            keyTxt.rectTransform.offsetMax = new Vector2(-26f, 0f);
+            AddShadow(keyTxt.gameObject, new Color(0f, 0f, 0f, 0.95f), new Vector2(2f, -2f));
         }
 
-        backFromControlsButton = NewButton("BotaoVoltarControles", controlsPanel, "VOLTAR", new Vector2(0f, -310f), IceColor);
+        backFromControlsButton = NewButton("BotaoVoltarControles", controlsPanel, "VOLTAR", new Vector2(0f, -340f), IceColor);
     }
 
     private void CreateElementMedal(string name, Transform parent, Vector2 pos, Sprite iconSprite, Color accent)
@@ -474,11 +485,11 @@ public class PauseMenuController : MonoBehaviour
         return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
     }
 
-    private static void AddShadow(GameObject go, Color c)
+    private static void AddShadow(GameObject go, Color c, Vector2? distance = null)
     {
         var s = go.AddComponent<Shadow>();
         s.effectColor = c;
-        s.effectDistance = new Vector2(6f, -6f);
+        s.effectDistance = distance ?? new Vector2(6f, -6f);
     }
 
     private static RectTransform NewRect(string name, Transform parent, Vector2 aMin, Vector2 aMax, Vector2 pos, Vector2 size)
@@ -499,21 +510,23 @@ public class PauseMenuController : MonoBehaviour
         rt.sizeDelta = size;
     }
 
-    private Text NewText(string name, Transform parent, string content, int size, Color color)
+    private Text NewText(string name, Transform parent, string content, int size, Color color, bool useOutline = true)
     {
-        var go = new GameObject(name, typeof(RectTransform), typeof(Text), typeof(Outline));
+        var go = new GameObject(name, typeof(RectTransform), typeof(Text));
         go.transform.SetParent(parent, false);
         var t = go.GetComponent<Text>();
         t.font = uiFont != null ? uiFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         t.text = content;
         t.fontSize = size;
-        t.fontStyle = FontStyle.Bold;
+        // BoldPixels já é uma fonte negrito; aplicar FontStyle.Bold duplica os traços e deixa as letras turvas
+        t.fontStyle = FontStyle.Normal;
         t.alignment = TextAnchor.MiddleCenter;
         t.color = color;
         t.raycastTarget = false;
         t.horizontalOverflow = HorizontalWrapMode.Overflow;
         t.verticalOverflow = VerticalWrapMode.Overflow;
-        go.GetComponent<Outline>().effectColor = new Color(0f, 0f, 0f, 0.9f);
+        if (useOutline)
+            go.AddComponent<Outline>().effectColor = new Color(0f, 0f, 0f, 0.9f);
         return t;
     }
 }
