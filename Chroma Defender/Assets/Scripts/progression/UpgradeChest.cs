@@ -128,6 +128,8 @@ public class UpgradeChest : MonoBehaviour
         if (other.GetComponentInParent<PlayerBehavior>() != null) playerInRange = false;
     }
 
+    private Texture2D promptBgTex;
+
     private void OnGUI()
     {
         if (opened || opening || openOnTouch || !playerInRange) return;
@@ -137,21 +139,40 @@ public class UpgradeChest : MonoBehaviour
         Vector3 screen = cam.WorldToScreenPoint(transform.position + Vector3.up * promptHeight);
         if (screen.z < 0f) return;
 
+        float scale = Mathf.Max(0.75f, Screen.height / 720f);
+        if (promptBgTex == null)
+        {
+            promptBgTex = new Texture2D(1, 1);
+            promptBgTex.SetPixel(0, 0, Color.white);
+            promptBgTex.Apply();
+        }
+
         if (promptStyle == null)
         {
             promptStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 16,
                 fontStyle = FontStyle.Bold
             };
         }
+        promptStyle.fontSize = Mathf.RoundToInt(17 * scale);
 
-        var rect = new Rect(screen.x - 80f, Screen.height - screen.y - 14f, 160f, 28f);
-        // Sombra para ler em qualquer fundo
-        promptStyle.normal.textColor = new Color(0f, 0f, 0f, 0.85f);
+        float w = 176f * scale;
+        float h = 32f * scale;
+        var rect = new Rect(screen.x - w * 0.5f, Screen.height - screen.y - h * 0.5f, w, h);
+
+        // Moldura dourada + fundo escuro
+        Color prev = GUI.color;
+        GUI.color = new Color(1f, 0.82f, 0.28f, 0.85f);
+        GUI.DrawTexture(new Rect(rect.x - 2f, rect.y - 2f, rect.width + 4f, rect.height + 4f), promptBgTex);
+        GUI.color = new Color(0.05f, 0.05f, 0.09f, 0.92f);
+        GUI.DrawTexture(rect, promptBgTex);
+        GUI.color = prev;
+
+        // Sombra + texto dourado
+        promptStyle.normal.textColor = new Color(0f, 0f, 0f, 0.9f);
         GUI.Label(new Rect(rect.x + 1.5f, rect.y + 1.5f, rect.width, rect.height), promptText, promptStyle);
-        promptStyle.normal.textColor = new Color(1f, 0.84f, 0.3f);
+        promptStyle.normal.textColor = new Color(1f, 0.86f, 0.32f);
         GUI.Label(rect, promptText, promptStyle);
     }
 }

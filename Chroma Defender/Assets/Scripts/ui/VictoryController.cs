@@ -95,6 +95,7 @@ public class VictoryController : MonoBehaviour
     private void Replay()
     {
         Time.timeScale = 1f;
+        GameProgress.ResetProgress();
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
