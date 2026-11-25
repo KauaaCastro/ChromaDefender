@@ -75,6 +75,7 @@ public class VictoryController : MonoBehaviour
         shownAt = Time.unscaledTime;
         SetVisible(true);
         Time.timeScale = 0f;
+        GameAudioManager.EnsureInstance()?.PlayVictory();
         var first = (nextButton != null && nextButton.interactable) ? nextButton : replayButton;
         if (first != null) EventSystem.current?.SetSelectedGameObject(first.gameObject);
     }
