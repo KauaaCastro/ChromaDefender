@@ -461,10 +461,17 @@ public class PlayerBehavior : MonoBehaviour
             }
         }
 
-        // Queda para fora do mapa / abismo: restaura posicao segura sem pular
+        // Queda para fora do mapa / abismo: aciona morte (mostra tela de Game Over) e renasce no checkpoint
         if (transform.position.y < -15f)
         {
-            RespawnAtSafePosition();
+            currentHealth = 0;
+            OnHealthChanged?.Invoke(0, maxHealth);
+            Die();
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+                rb.simulated = false;
+            }
             return;
         }
 
@@ -502,9 +509,10 @@ public class PlayerBehavior : MonoBehaviour
         // Reposiciona no ponto de spawn seguro
         transform.position = safeSpawnPosition;
 
-        // Zera velocidades físicas
+        // Zera velocidades físicas e garante simulação ativa após queda no abismo
         if (rb != null)
         {
+            rb.simulated = true;
             rb.linearVelocity = Vector2.zero;
         }
 
