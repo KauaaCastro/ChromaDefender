@@ -260,6 +260,21 @@ public class PlayerBehavior : MonoBehaviour
             transform.SetParent(null, true);
         }
 
+        // Caso o Player tenha sido salvo no meio da SampleScene (ex.: x ≈ 117 no Checkpoint_Trilha durante testes no Editor),
+        // reposiciona automaticamente no início real da Fase 1 ao iniciar/reiniciar a fase.
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == GameProgress.SceneFase1 &&
+            string.IsNullOrEmpty(GameProgress.PendingSpawnId) &&
+            transform.position.x > 100f)
+        {
+            transform.position = new Vector3(-0.17f, 1.78f, 0f);
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                Vector3 cp = cam.transform.position;
+                cam.transform.position = new Vector3(-0.17f, 1.78f, cp.z);
+            }
+        }
+
         safeSpawnPosition = transform.position;
         spawnGraceTimer = 0.45f;
 
@@ -326,9 +341,16 @@ public class PlayerBehavior : MonoBehaviour
     {
         AlignSpawnWithGround();
 
-        // Melhorias de combo vindas de baús continuam valendo em outras cenas
+        // Melhorias de combo e técnicas vindas de baús continuam valendo em outras cenas
         if (GameProgress.LightComboHits > unlockedLightHits)
             unlockedLightHits = Mathf.Clamp(GameProgress.LightComboHits, 2, 4);
+        if (GameProgress.HeavyComboHits > 0)
+        {
+            heavyAttackUnlocked = true;
+            unlockedHeavyHits = Mathf.Clamp(Mathf.Max(unlockedHeavyHits, GameProgress.HeavyComboHits), 1, 3);
+        }
+        if (GameProgress.WeaponArtUnlocked)
+            weaponArtUnlocked = true;
 
         var input = GameManager.Instance.InputManager;
         input.OnJump += HandleJumpInput;
@@ -1556,10 +1578,15 @@ public class PlayerBehavior : MonoBehaviour
     // ------------------------------------------------------------------
     // Métodos Públicos de Progressão (Itens / Fases)
     // ------------------------------------------------------------------
+    public bool IsHeavyAttackUnlocked => heavyAttackUnlocked;
+    public int UnlockedHeavyHits => unlockedHeavyHits;
+    public bool IsWeaponArtUnlocked => weaponArtUnlocked;
+
     public void UnlockHeavyAttack(int hitChain = 1)
     {
         heavyAttackUnlocked = true;
         unlockedHeavyHits = Mathf.Clamp(hitChain, 1, 3);
+        GameProgress.UnlockHeavyCombo(unlockedHeavyHits);
         Debug.Log($"<color=green>[Progressão]</color> Ataque Pesado desbloqueado! (Cadeia de {unlockedHeavyHits} golpes)");
     }
 
@@ -1568,12 +1595,14 @@ public class PlayerBehavior : MonoBehaviour
     public void UpgradeLightCombo(int hits)
     {
         unlockedLightHits = Mathf.Clamp(hits, 2, 4);
+        GameProgress.UnlockLightCombo(unlockedLightHits);
         Debug.Log($"<color=green>[Progressão]</color> Combo Leve melhorado para {unlockedLightHits} golpes!");
     }
 
     public void UnlockWeaponArt()
     {
         weaponArtUnlocked = true;
+        GameProgress.UnlockWeaponArt();
         Debug.Log("<color=green>[Progressão]</color> Habilidade Suprema (Weapon Art) desbloqueada!");
     }
 

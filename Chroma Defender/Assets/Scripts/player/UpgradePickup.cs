@@ -55,18 +55,23 @@ public class UpgradePickup : MonoBehaviour
         {
             case UpgradeType.UnlockHeavyAttack1:
                 player.UnlockHeavyAttack(1);
+                ProgressHud.Toast("Nova Técnica! <color=#FFD54A>Ataque Pesado</color>\nClique com o Botão Direito do Mouse para desferir um golpe pesado!", 4.5f);
                 break;
             case UpgradeType.UnlockHeavyComboFull:
                 player.UnlockHeavyAttack(3);
+                ProgressHud.Toast("Nova Técnica! <color=#FFD54A>Combo Pesado Nível 3</color>\nSeu Ataque Pesado agora encadeia 3 golpes devastadores!", 4.5f);
                 break;
             case UpgradeType.UpgradeLightCombo3:
                 player.UpgradeLightCombo(3);
+                ProgressHud.Toast("Nova Técnica! <color=#FFD54A>Combo Leve — 3º Golpe</color>\nSeu ataque rápido agora encadeia 3 golpes!", 4.5f);
                 break;
             case UpgradeType.UpgradeLightCombo4:
                 player.UpgradeLightCombo(4);
+                ProgressHud.Toast("Nova Técnica! <color=#FFD54A>Combo Leve — 4º Golpe</color>\nSeu ataque rápido agora encadeia 4 golpes!", 4.5f);
                 break;
             case UpgradeType.UnlockWeaponArt:
                 player.UnlockWeaponArt();
+                ProgressHud.Toast("Nova Técnica! <color=#FFD54A>Ataque Especial Supremo</color>\nPressione [F] ou [E] para liberar a Habilidade Suprema!", 4.5f);
                 break;
         }
     }

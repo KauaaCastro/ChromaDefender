@@ -41,10 +41,31 @@ public static class GameProgress
     /// <summary>Golpes do combo leve liberados por baús/itens (0 = nenhuma melhoria). O jogador aplica ao entrar na cena.</summary>
     public static int LightComboHits { get; private set; }
 
+    /// <summary>Golpes do ataque pesado liberados (0 = bloqueado, 1..3 = desbloqueado com N golpes).</summary>
+    public static int HeavyComboHits { get; private set; }
+
+    /// <summary>Indica se o Ataque Especial / Supremo (Weapon Art, teclas F/E) foi desbloqueado.</summary>
+    public static bool WeaponArtUnlocked { get; private set; }
+
     public static void UnlockLightCombo(int hits)
     {
         if (hits <= LightComboHits) return;
         LightComboHits = hits;
+        OnChanged?.Invoke();
+    }
+
+    public static void UnlockHeavyCombo(int hits = 1)
+    {
+        int clamped = Mathf.Clamp(hits, 1, 3);
+        if (clamped <= HeavyComboHits) return;
+        HeavyComboHits = clamped;
+        OnChanged?.Invoke();
+    }
+
+    public static void UnlockWeaponArt()
+    {
+        if (WeaponArtUnlocked) return;
+        WeaponArtUnlocked = true;
         OnChanged?.Invoke();
     }
 
@@ -72,6 +93,8 @@ public static class GameProgress
         keys.Clear();
         flags.Clear();
         LightComboHits = 0;
+        HeavyComboHits = 0;
+        WeaponArtUnlocked = false;
         PendingSpawnId = null;
         OnChanged?.Invoke();
     }
@@ -93,6 +116,8 @@ public static class GameProgress
         keys.Clear();
         flags.Clear();
         LightComboHits = 0;
+        HeavyComboHits = 0;
+        WeaponArtUnlocked = false;
         PendingSpawnId = null;
         OnChanged = null;
     }

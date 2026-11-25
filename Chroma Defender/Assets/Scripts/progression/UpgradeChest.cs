@@ -12,14 +12,26 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(Collider2D))]
 public class UpgradeChest : MonoBehaviour
 {
+    public enum UpgradeKind
+    {
+        LightCombo = 0,
+        HeavyAttack = 1,
+        WeaponArt = 2
+    }
+
     [Header("--- Identificação ---")]
     [Tooltip("Id único deste baú. Dois baús com o mesmo id contam como o mesmo baú.")]
     [SerializeField] private string chestId = "bau_combo_leve_3";
 
     [Header("--- Recompensa ---")]
+    [Tooltip("Tipo de técnica liberada por este baú (Combo Leve, Ataque Pesado ou Ataque Especial/Supremo).")]
+    [SerializeField] private UpgradeKind upgradeKind = UpgradeKind.LightCombo;
     [Tooltip("Quantidade de golpes do combo de ataque leve liberada (3 = terceiro golpe, 4 = quarto golpe).")]
     [Range(2, 4)]
     [SerializeField] private int lightComboHits = 3;
+    [Tooltip("Quantidade de golpes do ataque pesado liberada (1 a 3) quando Upgrade Kind = HeavyAttack.")]
+    [Range(1, 3)]
+    [SerializeField] private int heavyComboHits = 1;
     [SerializeField] private string rewardTitle = "Combo Leve — 3º golpe";
     [SerializeField] private string rewardDescription = "Seu ataque rápido agora encadeia 3 golpes!";
 
@@ -94,11 +106,26 @@ public class UpgradeChest : MonoBehaviour
 
     private void GiveReward()
     {
-        GameProgress.UnlockLightCombo(lightComboHits);
-
         if (player == null) player = FindAnyObjectByType<PlayerBehavior>();
-        if (player != null && player.UnlockedLightHits < lightComboHits)
-            player.UpgradeLightCombo(lightComboHits);
+
+        switch (upgradeKind)
+        {
+            case UpgradeKind.HeavyAttack:
+                GameProgress.UnlockHeavyCombo(heavyComboHits);
+                if (player != null) player.UnlockHeavyAttack(heavyComboHits);
+                break;
+
+            case UpgradeKind.WeaponArt:
+                GameProgress.UnlockWeaponArt();
+                if (player != null) player.UnlockWeaponArt();
+                break;
+
+            default:
+                GameProgress.UnlockLightCombo(lightComboHits);
+                if (player != null && player.UnlockedLightHits < lightComboHits)
+                    player.UpgradeLightCombo(lightComboHits);
+                break;
+        }
 
         Vector3 top = transform.position + Vector3.up * 0.7f;
         FireVFX.SpawnFlameBurst(top, 22);

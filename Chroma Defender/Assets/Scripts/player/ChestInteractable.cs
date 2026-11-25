@@ -88,23 +88,30 @@ public class ChestInteractable : MonoBehaviour, IDamageableTarget
         {
             case ChestRewardType.UnlockHeavyAttack:
                 player.UnlockHeavyAttack(1);
+                ProgressHud.Toast("Baú aberto! <color=#FFD54A>Técnica: Ataque Pesado</color>\nUse o Botão Direito do Mouse para golpes pesados!", 4.5f);
                 Debug.Log("<color=gold>[BAÚ ABERTO]</color> Você encontrou a Técnica do <color=orange>Ataque Pesado</color>! (Pressione o botão de Ataque Pesado)");
                 break;
 
             case ChestRewardType.UpgradeLightCombo3:
                 player.UpgradeLightCombo(3);
+                ProgressHud.Toast("Baú aberto! <color=#FFD54A>Combo Leve — 3º Golpe</color>\nSeu ataque rápido agora encadeia 3 golpes!", 4.5f);
                 Debug.Log("<color=gold>[BAÚ ABERTO]</color> Combo Leve melhorado para <color=orange>3 golpes</color>!");
                 break;
 
             case ChestRewardType.CastleKey:
                 player.CollectCastleKey();
+                GameProgress.AddKey(GameProgress.KeyCastelo);
+                ProgressHud.Toast($"Baú aberto! <color=#FFD54A>{GameProgress.KeyDisplayName(GameProgress.KeyCastelo)}</color>!", 4f);
                 break;
 
             case ChestRewardType.FullHeal:
+                player.Heal(player.MaxHealth);
+                ProgressHud.Toast("Baú aberto! <color=#7CFF7C>Elixir Restaurador</color>\nSua vida foi totalmente regenerada!", 3.5f);
                 Debug.Log("<color=green>[BAÚ ABERTO]</color> Elixir Restaurador encontrado! Vida totalmente regenerada!");
                 break;
 
             case ChestRewardType.SecretDemoTreasure:
+                ProgressHud.Toast("<color=#FFD54A>Grande Tesouro Secreto Encontrado!</color>\nParabéns por explorar a câmara secreta!", 5f);
                 Debug.Log("<color=yellow>[CÂMARA SECRETA]</color> 🏆 Parabéns! Você encontrou o Grande Tesouro Secreto da Demo de Chroma Defender!");
                 break;
         }
