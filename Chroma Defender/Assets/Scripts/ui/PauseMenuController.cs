@@ -211,6 +211,7 @@ public class PauseMenuController : MonoBehaviour
         showingControls = false;
         Time.timeScale = 1f;
         SetPausedImmediate(false);
+        GameProgress.ResetProgress();
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
