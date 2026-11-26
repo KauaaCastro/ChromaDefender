@@ -10,7 +10,17 @@ public enum EnemyType
     Rat,    // Rato: Apenas patrulha de um lado para o outro. Causa dano de contato.
     Slime,  // Slime: Patrulha no chão, persegue e golpeia com estocada ácida.
     Bat,    // Morcego: Voador, patrulha no ar, persegue e dá rasante cortante.
-    Mimic   // Mímico: Camuflado, desperta perto do jogador e desfere mordidas brutais.
+    Mimic,  // Mímico: Camuflado, desperta perto do jogador e desfere mordidas brutais.
+
+    // --- Fase 2: Castelo (asset "Hero and Opponents") ---
+    SkeletonSword,  // Esqueleto Espadachim: corpo a corpo, golpe com espada.
+    SkeletonShield, // Esqueleto Escudeiro: o escudo BLOQUEIA golpes pela frente (ataque pelas costas ou com golpe pesado).
+    SkeletonSpear,  // Esqueleto Lanceiro: alcance longo com a lança.
+    Archer,         // Arqueiro: mantém distância e atira flechas.
+
+    // --- Fase 3: Área Mágica ---
+    ShadowSpikes,   // Sombra Espinhosa: monte de sombra lento que explode em espinhos quando o jogador chega perto.
+    DarkMage        // Mago Sombrio (asset "EVil Wizard"): conjura orbes elementais à distância.
 }
 
 /// <summary>
@@ -94,6 +104,43 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
     [SerializeField] private float deathFrameDuration = 0.08f;
     [SerializeField] private bool autoLoadSprites = true;
 
+    [Header("--- Golpe Ativo (ajuste fino) ---")]
+    [Tooltip("Segundos entre o início da animação de ataque e o momento do acerto (ou do disparo).")]
+    [SerializeField] private float attackWindup = 0.28f;
+    [Tooltip("Força do 'bote' na direção do jogador ao atacar (multiplica a velocidade de perseguição). 0 = ataca parado.")]
+    [SerializeField] private float attackLungeMultiplier = 1.3f;
+    [Tooltip("Aviso ANTES do golpe: o inimigo para, pisca e mostra \"!\" por este tempo. Durante o aviso e o golpe ele fica " +
+             "vulnerável (o escudo abaixa) — janela para contra-atacar. 0 = sem aviso.")]
+    [SerializeField] private float attackTelegraph = 0f;
+    [Tooltip("Segundos parado depois do golpe (recuperação, ainda vulnerável).")]
+    [SerializeField] private float attackRecovery = 0.25f;
+    [Tooltip("Segundos que leva para se virar quando o jogador passa para as suas costas. 0 = vira na hora.")]
+    [SerializeField] private float turnAroundDelay = 0f;
+
+    [Header("--- Ataque à Distância (Arqueiro / Mago) ---")]
+    [SerializeField] private bool rangedAttack = false;
+    [SerializeField] private Sprite[] projectileSprites;
+    [SerializeField] private float projectileSpeed = 8f;
+    [SerializeField] private float projectileScale = 1f;
+    [Tooltip("Curva do projétil em direção ao jogador (0 = reto).")]
+    [SerializeField] private float projectileHoming = 0f;
+    [Tooltip("Ponto de saída do projétil, relativo aos pés do inimigo (X para a frente).")]
+    [SerializeField] private Vector2 projectileSpawnOffset = new Vector2(0.5f, 0.6f);
+    [Tooltip("Ligado: projétil do mesmo elemento do inimigo (pode ser absorvido pelo jogador com o mesmo elemento). Desligado: neutro.")]
+    [SerializeField] private bool projectileUsesPolarity = false;
+    [Tooltip("Se o jogador chegar mais perto que isso, o inimigo recua (0 = nunca recua).")]
+    [SerializeField] private float keepDistance = 0f;
+
+    [Header("--- Escudo Frontal (Esqueleto Escudeiro) ---")]
+    [SerializeField] private bool blocksFrontalHits = false;
+    [Tooltip("Golpes com dano igual ou maior que este quebram a guarda mesmo pela frente (golpes pesados).")]
+    [SerializeField] private int guardBreakDamage = 50;
+
+    [Header("--- Alinhamento da Arte ---")]
+    [Tooltip("Distância (em unidades, já com a escala) do centro do quadro até o centro do corpo, na arte original. " +
+             "Só funciona com o SpriteRenderer num objeto filho (\"Visual\").")]
+    [SerializeField] private float spriteBodyOffsetX = 0f;
+
     // Componentes internos
     private Rigidbody2D rb;
     private Collider2D col;
@@ -122,6 +169,12 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
     private bool isDead;
     private float hurtUntil;
     private Coroutine attackRoutine;
+    private int facingDir = 1; // 1 = olhando para a direita, -1 = esquerda
+    private float nextBlockTextTime;
+    private float turnTimer;    // tempo acumulado com o jogador às costas (turnAroundDelay)
+    private bool isTurning;     // jogador às costas, ainda "percebendo" — fica parado sem atacar
+    private bool telegraphing;
+    private Color telegraphBaseColor = Color.white;
 
     // Propriedades Públicas
     public EnemyType Type => enemyType;
@@ -302,8 +355,14 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
                 }
                 else
                 {
-                    float dirX = Mathf.Sign(playerTransform.position.x - transform.position.x);
-                    rb.linearVelocity = new Vector2(dirX * chaseSpeed, rb.linearVelocity.y);
+                    float dx = playerTransform.position.x - transform.position.x;
+                    float dirX = Mathf.Sign(dx);
+                    float vx = isTurning ? 0f : dirX * chaseSpeed; // virando: fica parado (não anda de costas)
+                    float adx = Mathf.Abs(dx);
+                    if (keepDistance > 0f && adx < keepDistance) vx = -dirX * chaseSpeed * 0.8f; // recua para manter distância
+                    else if (rangedAttack && adx <= attackRange * 0.85f) vx = 0f;               // já no alcance: para e mira
+                    if (vx != 0f && (rangedAttack || keepDistance > 0f) && CheckLedgeInDirection((int)Mathf.Sign(vx))) vx = 0f; // não cai da plataforma
+                    rb.linearVelocity = new Vector2(vx, rb.linearVelocity.y);
                 }
             }
         }
@@ -361,10 +420,12 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
         return false;
     }
 
-    private bool CheckLedgeAhead()
+    private bool CheckLedgeAhead() => CheckLedgeInDirection(patrolDirection);
+
+    private bool CheckLedgeInDirection(int dir)
     {
-        if (isFlying || col == null) return false;
-        Vector2 aheadOrigin = new Vector2(transform.position.x + patrolDirection * (col.bounds.extents.x + 0.15f), col.bounds.min.y + 0.1f);
+        if (isFlying || col == null || dir == 0) return false;
+        Vector2 aheadOrigin = new Vector2(col.bounds.center.x + dir * (col.bounds.extents.x + 0.15f), col.bounds.min.y + 0.1f);
         RaycastHit2D groundHit = Physics2D.Raycast(aheadOrigin, Vector2.down, 0.75f, LayerMask.GetMask("Ground", "Default"));
         return groundHit.collider == null;
     }
@@ -422,6 +483,25 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
             return;
         }
 
+        float dirX = Mathf.Sign(playerTransform.position.x - transform.position.x);
+
+        // Demora para se virar quando o jogador passa para as costas (Escudeiro): janela para golpes por trás.
+        isTurning = false;
+        if (turnAroundDelay > 0f && (int)dirX != facingDir && Mathf.Abs(playerTransform.position.x - transform.position.x) > 0.15f)
+        {
+            turnTimer += Time.deltaTime;
+            if (turnTimer < turnAroundDelay)
+            {
+                isTurning = true;
+                if (currentVisualState != EnemyAnimState.Hurt && currentVisualState != EnemyAnimState.Attack)
+                    PlayAnimState(EnemyAnimState.Idle);
+                return; // não vira e não ataca ainda
+            }
+            // Terminou de virar: não ataca no mesmo instante.
+            nextAttackTime = Mathf.Max(nextAttackTime, Time.time + 0.4f);
+        }
+        turnTimer = 0f;
+
         // Se está ao alcance do golpe ativo e fora de cooldown, ataca!
         if (dist <= attackRange && Time.time >= nextAttackTime)
         {
@@ -430,12 +510,14 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
         }
 
         // Persegue o jogador
-        float dirX = Mathf.Sign(playerTransform.position.x - transform.position.x);
         UpdateFacing((int)dirX);
 
         if (currentVisualState != EnemyAnimState.Hurt && currentVisualState != EnemyAnimState.Attack)
         {
-            PlayAnimState(EnemyAnimState.Move);
+            // Atirador parado no alcance, esperando a recarga: fica em pose de espera em vez de "andar no lugar".
+            float adx = Mathf.Abs(playerTransform.position.x - transform.position.x);
+            bool holding = rangedAttack && adx <= attackRange * 0.85f && !(keepDistance > 0f && adx < keepDistance);
+            PlayAnimState(holding ? EnemyAnimState.Idle : EnemyAnimState.Move);
         }
     }
 
@@ -453,20 +535,45 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
         float facing = Mathf.Sign(playerTransform.position.x - transform.position.x);
         UpdateFacing((int)facing);
 
+        // Aviso antes do golpe: parado, piscando, com "!" — o escudo já está abaixado (estado Attacking).
+        if (attackTelegraph > 0f)
+        {
+            PlayAnimState(EnemyAnimState.Idle, true);
+            FloatingText.Spawn(transform.position + Vector3.up * 2f, "!", new Color(1f, 0.55f, 0.2f));
+            Color baseColor = sr != null ? sr.color : Color.white;
+            telegraphBaseColor = baseColor;
+            telegraphing = true;
+            float t = 0f;
+            while (t < attackTelegraph)
+            {
+                t += Time.deltaTime;
+                if (sr != null) sr.color = Color.Lerp(baseColor, new Color(1f, 0.6f, 0.35f), Mathf.PingPong(t * 8f, 1f) * 0.6f);
+                if (rb != null && !isFlying) rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
+                yield return null;
+            }
+            telegraphing = false;
+            if (sr != null) sr.color = baseColor;
+            if (playerTransform == null || playerBehavior.IsDead) { currentState = State.Chase; yield break; }
+        }
+
         // Toca animação de ataque
         PlayAnimState(EnemyAnimState.Attack, true);
 
         // Dá um pequeno salto / bote na direção do jogador
-        if (rb != null)
+        if (rb != null && attackLungeMultiplier > 0f && !rangedAttack)
         {
-            rb.linearVelocity = new Vector2(facing * (chaseSpeed * 1.3f), isFlying ? -1.5f : 2.5f);
+            rb.linearVelocity = new Vector2(facing * (chaseSpeed * attackLungeMultiplier), isFlying ? -1.5f : 2.5f);
         }
 
         // Tempo de antecipação do golpe
-        yield return new WaitForSeconds(0.28f);
+        yield return new WaitForSeconds(attackWindup);
 
+        if (rangedAttack)
+        {
+            FireProjectile(facing);
+        }
         // Verifica acerto no jogador
-        if (playerTransform != null && !playerBehavior.IsDead && !playerBehavior.IsInvulnerable)
+        else if (playerTransform != null && !playerBehavior.IsDead && !playerBehavior.IsInvulnerable)
         {
             float hitDist = Vector2.Distance(transform.position, playerTransform.position);
             if (hitDist <= attackRange * 1.35f)
@@ -481,7 +588,7 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
         }
 
         // Tempo de recuperação do ataque
-        yield return new WaitForSeconds(0.25f);
+        yield return new WaitForSeconds(attackRecovery);
 
         // Se for mob voador (Morcego), executa recuo tático para ganhar distância
         // e inverte a posição ao voar para trás para não dar a impressão de voar de costas sem animação
@@ -498,6 +605,28 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
             currentState = State.Chase;
             PlayAnimState(EnemyAnimState.Move);
         }
+    }
+
+    /// <summary>Dispara uma flecha / orbe na direção do jogador (Arqueiro, Mago Sombrio).</summary>
+    private void FireProjectile(float facing)
+    {
+        if (playerTransform == null || playerBehavior == null || playerBehavior.IsDead) return;
+
+        Vector3 origin = transform.position + new Vector3(facing * projectileSpawnOffset.x, projectileSpawnOffset.y, 0f);
+        if (col != null) origin.y = col.bounds.min.y + projectileSpawnOffset.y;
+
+        Vector2 target = (Vector2)playerTransform.position + Vector2.up * 0.6f;
+        Vector2 dir = target - (Vector2)origin;
+        // Atiradores de chão miram quase na horizontal (a flecha não "persegue" o jogador no ar).
+        if (projectileHoming <= 0f) dir.y = Mathf.Clamp(dir.y, -Mathf.Abs(dir.x) * 0.35f, Mathf.Abs(dir.x) * 0.35f);
+        if (dir.sqrMagnitude < 0.001f) dir = new Vector2(facing, 0f);
+        dir.Normalize();
+
+        EnemyPolarityType elem = projectileUsesPolarity ? polarity : EnemyPolarityType.Neutral;
+        int order = sr != null ? sr.sortingOrder + 1 : 20;
+        Color? tint = elem == EnemyPolarityType.Neutral ? Color.white : (Color?)null;
+        EnemyProjectile.Spawn(origin, dir * projectileSpeed, activeAttackDamage, elem, projectileSprites,
+            projectileScale, 3.5f, projectileHoming, order, attackKnockback * 0.6f, tint);
     }
 
     // ------------------------------------------------------------------
@@ -540,6 +669,22 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
     public void TakeDamage(int damage, Vector2 knockback, ElementPolarity attackPolarity)
     {
         if (isDead) return;
+
+        // Golpe durante o aviso: devolve a cor normal antes do flash (senão o tom laranja ficaria preso).
+        if (telegraphing && sr != null) { telegraphing = false; sr.color = telegraphBaseColor; }
+
+        // Escudo frontal: golpes vindos da frente são bloqueados (exceto golpes pesados), a menos que ele esteja atacando.
+        if (blocksFrontalHits && currentState != State.Attacking && damage < guardBreakDamage && IsAttackFromFront())
+        {
+            if (rb != null) rb.linearVelocity = new Vector2(-facingDir * 1.5f, rb.linearVelocity.y);
+            StartCoroutine(FlashRoutine(new Color(0.75f, 0.75f, 0.75f)));
+            if (Time.time >= nextBlockTextTime)
+            {
+                nextBlockTextTime = Time.time + 1.2f;
+                FloatingText.Spawn(transform.position + Vector3.up * 1.8f, "Bloqueado!", new Color(0.85f, 0.85f, 0.85f));
+            }
+            return;
+        }
 
         // Regra de Polaridade Rigorosa (Chroma Defender)
         ElementPolarity? required = RequiredAttackPolarity;
@@ -763,12 +908,24 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
         }
     }
 
+    /// <summary>O jogador (quem bate) está do lado para onde o inimigo está olhando?</summary>
+    private bool IsAttackFromFront()
+    {
+        if (playerTransform == null) FindPlayer();
+        if (playerTransform == null) return true;
+        float side = Mathf.Sign(playerTransform.position.x - transform.position.x);
+        return side == facingDir;
+    }
+
     private void UpdateFacing(int dir)
     {
         if (dir == 0 || sr == null) return;
+        facingDir = dir > 0 ? 1 : -1;
 
-        // O asset original do Morcego, Rato e Slime foram desenhados olhando para a DIREITA.
-        bool defaultFacingRight = (enemyType == EnemyType.Bat || enemyType == EnemyType.Rat || enemyType == EnemyType.Slime);
+        // O asset original do Morcego, Rato e Slime foram desenhados olhando para a DIREITA
+        // (assim como os esqueletos, o arqueiro, a sombra e o mago das Fases 2 e 3).
+        bool defaultFacingRight = (enemyType == EnemyType.Bat || enemyType == EnemyType.Rat || enemyType == EnemyType.Slime
+            || (int)enemyType >= (int)EnemyType.SkeletonSword);
 
         bool flip;
         if (defaultFacingRight)
@@ -784,6 +941,13 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
 
         if (invertFacing) flip = !flip;
         sr.flipX = flip;
+
+        // Arte com o corpo fora do centro do quadro: desloca o Visual para o corpo ficar sobre o colisor.
+        if (spriteBodyOffsetX != 0f && sr.transform != transform)
+        {
+            Vector3 lp = sr.transform.localPosition;
+            sr.transform.localPosition = new Vector3(flip ? spriteBodyOffsetX : -spriteBodyOffsetX, lp.y, lp.z);
+        }
     }
 
     public void ApplyElementalTint()
@@ -848,7 +1012,60 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
                 if (hurtSprites == null || hurtSprites.Length == 0) hurtSprites = LoadSpritesFromPath($"{folder}/hurt.png");
                 if (deathFrames == null || deathFrames.Length == 0) deathFrames = LoadSpritesFromPath($"{folder}/death.png");
                 break;
+
+            // --- Fase 2 / Fase 3: quadros soltos (idle-1.png, idle-2.png...) do pacote "Hero and Opponents" ---
+            case EnemyType.SkeletonSword:  LoadHeroOpponentFrames("Enemy1", "walk", "attack-A"); break;
+            case EnemyType.SkeletonShield: LoadHeroOpponentFrames("Enemy2", "walk", "attack-A"); break;
+            case EnemyType.SkeletonSpear:  LoadHeroOpponentFrames("Enemy4", "walk", "attack-A"); break;
+            case EnemyType.Archer:         LoadHeroOpponentFrames("Enemy5", "run", "attack-A"); break;
+            case EnemyType.ShadowSpikes:   LoadHeroOpponentFrames("Enemy3", "walk", "attack-C"); break;
+
+            case EnemyType.DarkMage:
+                folder = "Assets/EVil Wizard/Sprites";
+                if (idleSprites == null || idleSprites.Length == 0) idleSprites = LoadSpritesFromPath($"{folder}/Idle.png");
+                if (moveSprites == null || moveSprites.Length == 0) moveSprites = LoadSpritesFromPath($"{folder}/Move.png");
+                if (attackSprites == null || attackSprites.Length == 0) attackSprites = LoadSpritesFromPath($"{folder}/Attack.png");
+                if (hurtSprites == null || hurtSprites.Length == 0) hurtSprites = LoadSpritesFromPath($"{folder}/Take Hit.png");
+                if (deathFrames == null || deathFrames.Length == 0) deathFrames = LoadSpritesFromPath($"{folder}/Death.png");
+                if (projectileSprites == null || projectileSprites.Length == 0) projectileSprites = LoadSpritesFromPath("Assets/Evil Wizard 3/Sprites/Projectile/Moving.png");
+                break;
         }
+#endif
+    }
+
+    private void LoadHeroOpponentFrames(string enemyFolder, string movePrefix, string attackPrefix)
+    {
+#if UNITY_EDITOR
+        string folder = "Assets/Hero and Opponents/Sprites/" + enemyFolder;
+        if (idleSprites == null || idleSprites.Length == 0) idleSprites = LoadFramesFromFolder(folder, "idle-");
+        if (moveSprites == null || moveSprites.Length == 0) moveSprites = LoadFramesFromFolder(folder, movePrefix + "-");
+        if (attackSprites == null || attackSprites.Length == 0) attackSprites = LoadFramesFromFolder(folder, attackPrefix);
+        if (hurtSprites == null || hurtSprites.Length == 0) hurtSprites = LoadFramesFromFolder(folder, "hit-");
+        if (deathFrames == null || deathFrames.Length == 0) deathFrames = LoadFramesFromFolder(folder, "dead-");
+#endif
+    }
+
+    /// <summary>Carrega quadros soltos de uma pasta: prefixo + número (ex.: "attack-A1.png" ... "attack-A8.png"), em ordem numérica.</summary>
+    public static Sprite[] LoadFramesFromFolder(string folder, string prefix)
+    {
+#if UNITY_EDITOR
+        var found = new List<KeyValuePair<int, Sprite>>();
+        foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:Sprite", new[] { folder }))
+        {
+            string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+            string file = System.IO.Path.GetFileNameWithoutExtension(path);
+            if (!file.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase)) continue;
+            if (!int.TryParse(file.Substring(prefix.Length), out int n)) continue;
+            var s = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            if (s != null && !found.Exists(f => f.Key == n)) found.Add(new KeyValuePair<int, Sprite>(n, s));
+        }
+        if (found.Count == 0) return null;
+        found.Sort((a, b) => a.Key.CompareTo(b.Key));
+        var result = new Sprite[found.Count];
+        for (int i = 0; i < found.Count; i++) result[i] = found[i].Value;
+        return result;
+#else
+        return null;
 #endif
     }
 

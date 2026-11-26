@@ -403,7 +403,8 @@ public static class Fase1ContinuacaoBuilder
         lg.Configure(GameProgress.SceneFase2, GameProgress.SpawnFase2Entrada, GameProgress.KeyCastelo,
             "O portão do Castelo está trancado por um cadeado dourado.\nDerrote o Ceifador Sombrio para conseguir a chave!",
             "A Chave Dourada abriu o portão do Castelo!",
-            "Entrando no Castelo...");
+            "Entrando no Castelo...",
+            "[W] Entrar no Castelo");
         lg.ConfigureVisuals(padlock.GetComponent<SpriteRenderer>(), padlockFrames, new[] { gateClosed }, new[] { gateOpen });
         EditorUtility.SetDirty(lg);
 
@@ -454,7 +455,8 @@ public static class Fase1ContinuacaoBuilder
         lg.Configure(GameProgress.SceneFase3, GameProgress.SpawnFase3Entrada, GameProgress.KeyPoco,
             "Um cadeado mágico sela o Poço Antigo.\nA chave está guardada no Castelo (Fase 2) — volte aqui quando encontrá-la.",
             "A Chave de Prata abriu o Poço! Uma luz mágica brilha lá no fundo...",
-            "Descendo pelo poço até a Área Mágica...");
+            "Descendo pelo poço até a Área Mágica...",
+            "[W] Descer pelo Poço");
         lg.ConfigureVisuals(padlock.GetComponent<SpriteRenderer>(), padlockFrames, null, null);
         EditorUtility.SetDirty(lg);
     }
@@ -499,65 +501,70 @@ public static class Fase1ContinuacaoBuilder
         Debug.Log($"<color=lime>[Chroma Defender]</color> Cena provisória criada: {path}");
     }
 
+    /// <summary>
+    /// Fase 2 — Castelo: o LABIRINTO DO CASTELO (8 salas ligadas por portas, Sala do Trono com o Mestre de Armas).
+    /// Montado pelo LabirintoCasteloBuilder (também disponível no menu Chroma Defender → Labirinto do Castelo).
+    /// </summary>
     private static void BuildFase2Content(Tilemap tm, Transform root)
     {
-        PaintSimpleRoom(tm, -14, 42, new[] { (28, 32, -1) });
-
-        Sprite[] props = LoadSpritesSorted(MedievalProps);
-        Sprite open = props.FirstOrDefault(x => x.name == "Medieval_props_free_4");
-        Sprite torch = props.FirstOrDefault(x => x.name == "Medieval_props_free_21");
-        Sprite shield = props.FirstOrDefault(x => x.name == "Medieval_props_free_20");
-        for (int i = 0; i < 6; i++) SpriteObj(root, "Tocha_" + i, torch, new Vector3(-4 + i * 7, 1.8f, 0f), 1.4f, 3);
-        for (int i = 0; i < 3; i++) SpriteObj(root, "Escudo_" + i, shield, new Vector3(0.5f + i * 10, 3.2f, 0f), 1.2f, 3);
-
-        SpriteObj(root, "Porta_Saida", open, new Vector3(-10f, 0.5f, 0f), 2.6f, 4);
-        var exit = new GameObject("Saida_VoltarFloresta");
-        exit.transform.SetParent(root);
-        exit.transform.position = new Vector3(-10f, 0.5f, 0f);
-        var ec = exit.AddComponent<BoxCollider2D>();
-        ec.isTrigger = true;
-        ec.size = new Vector2(1.6f, 3f);
-        exit.AddComponent<LevelGate>().Configure(GameProgress.SceneFase1, GameProgress.SpawnFase1Castelo, "",
-            "", "", "Voltando à Floresta...");
-
-        var spawn = new GameObject("Spawn_Entrada");
-        spawn.transform.SetParent(root);
-        spawn.transform.position = new Vector3(-5f, 0.5f, 0f);
-        spawn.AddComponent<SpawnPoint>().Configure(GameProgress.SpawnFase2Entrada);
-
-        CreateHint(root, "Dica_Fase2", -6f, -1f, 4f,
-            "FASE 2 — CASTELO (provisório)\nPegue a Chave de Prata no altar e volte pela porta à esquerda.", 6f);
-
-        var key = SpriteObj(root, "Chave_Poco", AssetDatabase.LoadAssetAtPath<Sprite>(KeySilverSprite), new Vector3(30f, 1.4f, 0f), 1.3f, 60);
-        var kc = key.AddComponent<CircleCollider2D>();
-        kc.isTrigger = true;
-        kc.radius = 0.6f;
-        key.AddComponent<ProgressKeyPickup>().Configure(GameProgress.KeyPoco);
+        LabirintoCasteloBuilder.Build(tm, root, includeSceneEntrance: true);
     }
 
+    /// <summary>
+    /// Fase 3 — Área Mágica (base para expandir):
+    ///   Mago Sombrio → Sombras Espinhosas → Mago no degrau → Checkpoint → Arena: Arquimago do Caos (vitória).
+    /// </summary>
     private static void BuildFase3Content(Tilemap tm, Transform root)
     {
-        PaintSimpleRoom(tm, -14, 42, new (int, int, int)[0]);
+        const float floor = -1f;
+        PaintSimpleRoom(tm, -14, 74, new[] { (30, 34, 0) });
 
         Sprite[] props = LoadSpritesSorted(MedievalProps);
         Sprite crystal = props.FirstOrDefault(x => x.name == "Medieval_props_free_0");
-        for (int i = 0; i < 8; i++) SpriteObj(root, "Cristal_" + i, crystal, new Vector3(-8 + i * 6, -0.4f, 0f), 1.1f, 3);
+        for (int i = 0; i < 14; i++) SpriteObj(root, "Cristal_" + i, crystal, new Vector3(-8 + i * 6, -0.4f, 0f), 1.1f, 3);
 
         var spawn = new GameObject("Spawn_Entrada");
         spawn.transform.SetParent(root);
         spawn.transform.position = new Vector3(-5f, 0.5f, 0f);
-        spawn.AddComponent<SpawnPoint>().Configure(GameProgress.SpawnFase3Entrada);
+        spawn.AddComponent<SpawnPoint>().Configure(GameProgress.SpawnFase3Entrada, isDefault: true);
 
-        CreateHint(root, "Dica_Fase3", -6f, -1f, 4f,
-            "FASE 3 — ÁREA MÁGICA (provisório)\nSiga até o fim para concluir a demo.", 6f);
+        CreateHint(root, "Dica_Fase3", -6f, floor, 4f,
+            "FASE 3 — ÁREA MÁGICA\nOrbes da MESMA cor do seu elemento são absorvidos sem dano!", 6f);
 
-        var end = new GameObject("GatilhoVitoria_Fase3");
-        end.transform.SetParent(root);
-        end.transform.position = new Vector3(38f, 1f, 0f);
-        var bc = end.AddComponent<BoxCollider2D>();
-        bc.isTrigger = true;
-        bc.size = new Vector2(2f, 6f);
-        end.AddComponent<VictoryTrigger>();
+        var enemies = Group(root, "Inimigos");
+        PlaceEnemy(enemies, Fase2Fase3PrefabCreator.DarkMage, 10f, floor);
+        PlaceEnemy(enemies, Fase2Fase3PrefabCreator.ShadowSpikes, 18f, floor);
+        PlaceEnemy(enemies, Fase2Fase3PrefabCreator.ShadowSpikes, 24f, floor);
+        PlaceEnemy(enemies, Fase2Fase3PrefabCreator.DarkMage, 32f, 1f);
+        CreateCheckpoint(root, "Checkpoint_Arena", 40f, floor);
+
+        var mgr = new GameObject("EnemyRespawnManager");
+        mgr.transform.SetParent(root);
+        mgr.AddComponent<EnemyRespawnManager>();
+
+        PlaceBoss(root, Fase2Fase3PrefabCreator.BossFase3, 64f, floor, 45f, 71f);
+    }
+
+    private static void PlaceEnemy(Transform parent, string prefabName, float x, float surfaceY)
+    {
+        var prefab = Fase2Fase3PrefabCreator.LoadEnemy(prefabName);
+        if (prefab == null) { Debug.LogWarning($"[Chroma Defender] Prefab {prefabName} não encontrado."); return; }
+        var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+        inst.transform.position = new Vector3(x, surfaceY + 0.05f, 0f);
+    }
+
+    private static void PlaceBoss(Transform parent, string prefabName, float x, float surfaceY, float minX, float maxX)
+    {
+        var prefab = Fase2Fase3PrefabCreator.LoadBoss(prefabName);
+        if (prefab == null) { Debug.LogWarning($"[Chroma Defender] Prefab {prefabName} não encontrado."); return; }
+        var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+        inst.transform.position = new Vector3(x, surfaceY + 0.05f, 0f);
+        var boss = inst.GetComponent<BossBase>();
+        if (boss != null)
+        {
+            boss.ConfigureArena(minX, maxX);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(boss);
+        }
     }
 
     /// <summary>Sala simples: chão em y=-1, paredes laterais e degraus opcionais (x0, x1, linhaTopo).</summary>

@@ -9,13 +9,21 @@ using UnityEngine;
 public class SpawnPoint : MonoBehaviour
 {
     [SerializeField] private string spawnId;
+    [Tooltip("Ponto inicial da cena quando ela é aberta direto (Play no editor), sem vir de outra fase.")]
+    [SerializeField] private bool isDefaultSpawn = false;
 
-    public void Configure(string id) => spawnId = id;
+    public void Configure(string id, bool isDefault = false)
+    {
+        spawnId = id;
+        isDefaultSpawn = isDefault;
+    }
 
     private IEnumerator Start()
     {
-        if (string.IsNullOrEmpty(spawnId) || GameProgress.PendingSpawnId != spawnId) yield break;
-        GameProgress.PendingSpawnId = null;
+        bool arriving = !string.IsNullOrEmpty(spawnId) && GameProgress.PendingSpawnId == spawnId;
+        bool directPlay = isDefaultSpawn && string.IsNullOrEmpty(GameProgress.PendingSpawnId);
+        if (!arriving && !directPlay) yield break;
+        if (arriving) GameProgress.PendingSpawnId = null;
 
         // Espera o PlayerBehavior.Start (que alinha o spawn padrão ao chão) rodar primeiro.
         yield return null;

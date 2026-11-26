@@ -329,6 +329,10 @@ public class PlayerBehavior : MonoBehaviour
         // Melhorias de combo vindas de baús continuam valendo em outras cenas
         if (GameProgress.LightComboHits > unlockedLightHits)
             unlockedLightHits = Mathf.Clamp(GameProgress.LightComboHits, 2, 4);
+        if (GameProgress.HeavyHits > UnlockedHeavyHits)
+            UnlockHeavyAttack(GameProgress.HeavyHits);
+        if (GameProgress.WeaponArt && !weaponArtUnlocked)
+            weaponArtUnlocked = true;
 
         var input = GameManager.Instance.InputManager;
         input.OnJump += HandleJumpInput;
@@ -368,8 +372,11 @@ public class PlayerBehavior : MonoBehaviour
                     rbTilemap.bodyType = RigidbodyType2D.Static;
 
                     composite = tm.gameObject.AddComponent<CompositeCollider2D>();
-                    composite.geometryType = CompositeCollider2D.GeometryType.Polygons;
                 }
+                // OUTLINES (e não Polygons): em mapas fechados (salas com teto e paredes, como o castelo
+                // da Fase 2) o modo Polygons gera polígonos quebrados/preenchidos — o jogador afunda no chão
+                // e é "cuspido" para cima nas bordas. Outlines só contorna as superfícies e é estável.
+                composite.geometryType = CompositeCollider2D.GeometryType.Outlines;
                 tilemapCol.usedByComposite = true;
             }
         }
@@ -1556,6 +1563,11 @@ public class PlayerBehavior : MonoBehaviour
     }
 
     public int UnlockedLightHits => unlockedLightHits;
+
+    /// <summary>Golpes do ataque pesado liberados (0 = bloqueado).</summary>
+    public int UnlockedHeavyHits => heavyAttackUnlocked ? unlockedHeavyHits : 0;
+
+    public bool WeaponArtUnlocked => weaponArtUnlocked;
 
     public void UpgradeLightCombo(int hits)
     {

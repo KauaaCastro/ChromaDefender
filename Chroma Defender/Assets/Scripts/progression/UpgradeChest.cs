@@ -1,10 +1,19 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// Baú de melhoria. O jogador chega perto e aperta W / ↑ (ou só encosta, se "openOnTouch" estiver ligado).
-/// O baú toca a animação de abrir e, no fim dela, melhora o combo de ataque leve do cavaleiro.
+/// O baú toca a animação de abrir e, no fim dela, melhora uma habilidade do cavaleiro.
+///
+/// ESCALÁVEL — cada tipo de baú cuida de uma habilidade e dá o PRÓXIMO nível dela:
+///   Madeira → Combo Leve      (2 → 3 → 4 golpes)
+///   Prata   → Ataque Pesado   (bloqueado → 1 → 2 → 3 golpes)
+///   Ouro    → Ataque Especial (bloqueado → liberado)
+/// Com "Nível" = 0 o baú dá sempre o próximo nível (a ordem dos baús na fase não importa).
+/// Com "Nível" > 0 ele dá exatamente aquele nível. Se a habilidade já estiver nesse nível, o baú cura a vida.
+/// Prefabs prontos em Assets/Prefabs/Baus (menu Chroma Defender > Baús).
 ///
 /// Usa o Animator dos baús do pacote Cainos (parâmetro bool "IsOpened", estados Closed → Open → Opened).
 /// Fica registrado em GameProgress: depois de aberto, continua aberto ao morrer, ao trocar de cena e ao voltar.
@@ -12,16 +21,21 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(Collider2D))]
 public class UpgradeChest : MonoBehaviour
 {
+    public enum Melhoria { ComboLeve, AtaquePesado, Especial }
+
     [Header("--- Identificação ---")]
-    [Tooltip("Id único deste baú. Dois baús com o mesmo id contam como o mesmo baú.")]
-    [SerializeField] private string chestId = "bau_combo_leve_3";
+    [Tooltip("Id único deste baú. Vazio = gerado pela cena + posição (cada baú colocado conta como um baú diferente).")]
+    [SerializeField] private string chestId = "";
 
     [Header("--- Recompensa ---")]
-    [Tooltip("Quantidade de golpes do combo de ataque leve liberada (3 = terceiro golpe, 4 = quarto golpe).")]
-    [Range(2, 4)]
-    [SerializeField] private int lightComboHits = 3;
-    [SerializeField] private string rewardTitle = "Combo Leve — 3º golpe";
-    [SerializeField] private string rewardDescription = "Seu ataque rápido agora encadeia 3 golpes!";
+    [SerializeField] private Melhoria melhoria = Melhoria.ComboLeve;
+    [Tooltip("0 = próximo nível (escalável). Combo Leve: 3 ou 4 golpes. Ataque Pesado: 1 a 3 golpes. Especial: 1.")]
+    [FormerlySerializedAs("lightComboHits")]
+    [Range(0, 4)]
+    [SerializeField] private int nivel = 0;
+    [Tooltip("Vazio = texto automático conforme a melhoria e o nível.")]
+    [SerializeField] private string rewardTitle = "";
+    [SerializeField] private string rewardDescription = "";
 
     [Header("--- Interação ---")]
     [Tooltip("Abre sozinho ao encostar, sem apertar nada.")]
@@ -42,7 +56,13 @@ public class UpgradeChest : MonoBehaviour
     private PlayerBehavior player;
     private GUIStyle promptStyle;
 
-    private string FlagId => "bau_aberto_" + chestId;
+    private string FlagId => "bau_aberto_" + (string.IsNullOrEmpty(chestId) ? AutoId() : chestId);
+
+    private string AutoId()
+    {
+        Vector3 p = transform.position;
+        return $"{gameObject.scene.name}_{Mathf.RoundToInt(p.x * 10f)}_{Mathf.RoundToInt(p.y * 10f)}";
+    }
 
     private void Reset()
     {
@@ -94,15 +114,81 @@ public class UpgradeChest : MonoBehaviour
 
     private void GiveReward()
     {
-        GameProgress.UnlockLightCombo(lightComboHits);
-
         if (player == null) player = FindAnyObjectByType<PlayerBehavior>();
-        if (player != null && player.UnlockedLightHits < lightComboHits)
-            player.UpgradeLightCombo(lightComboHits);
+
+        int current = CurrentLevel();
+        int max = MaxLevel();
+        int target = nivel > 0 ? Mathf.Min(nivel, max) : current + 1;
 
         Vector3 top = transform.position + Vector3.up * 0.7f;
         FireVFX.SpawnFlameBurst(top, 22);
-        ProgressHud.Toast($"Baú aberto! <color=#FFD54A>{rewardTitle}</color>\n{rewardDescription}", 4.5f);
+
+        if (target <= current || target > max)
+        {
+            // Habilidade já no nível deste baú (ou no máximo): vira um baú de cura.
+            if (player != null) player.Heal(player.MaxHealth);
+            ProgressHud.Toast($"Baú aberto! <color=#FFD54A>Elixir Restaurador</color>\nVocê já domina {SkillName()}. Vida restaurada!", 4.5f);
+            return;
+        }
+
+        switch (melhoria)
+        {
+            case Melhoria.ComboLeve:
+                GameProgress.UnlockLightCombo(target);
+                if (player != null) player.UpgradeLightCombo(target);
+                break;
+            case Melhoria.AtaquePesado:
+                GameProgress.UnlockHeavy(target);
+                if (player != null) player.UnlockHeavyAttack(target);
+                break;
+            case Melhoria.Especial:
+                GameProgress.UnlockWeaponArt();
+                if (player != null) player.UnlockWeaponArt();
+                break;
+        }
+
+        string title = string.IsNullOrEmpty(rewardTitle) ? AutoTitle(target) : rewardTitle;
+        string desc = string.IsNullOrEmpty(rewardDescription) ? AutoDescription(target) : rewardDescription;
+        ProgressHud.Toast($"Baú aberto! <color=#FFD54A>{title}</color>\n{desc}", 4.5f);
+    }
+
+    private int CurrentLevel()
+    {
+        switch (melhoria)
+        {
+            case Melhoria.ComboLeve:
+                return Mathf.Max(2, GameProgress.LightComboHits, player != null ? player.UnlockedLightHits : 0);
+            case Melhoria.AtaquePesado:
+                return Mathf.Max(GameProgress.HeavyHits, player != null ? player.UnlockedHeavyHits : 0);
+            default:
+                return GameProgress.WeaponArt || (player != null && player.WeaponArtUnlocked) ? 1 : 0;
+        }
+    }
+
+    private int MaxLevel() => melhoria == Melhoria.ComboLeve ? 4 : melhoria == Melhoria.AtaquePesado ? 3 : 1;
+
+    private string SkillName() =>
+        melhoria == Melhoria.ComboLeve ? "o Combo Leve" : melhoria == Melhoria.AtaquePesado ? "o Ataque Pesado" : "o Ataque Especial";
+
+    private string AutoTitle(int level)
+    {
+        switch (melhoria)
+        {
+            case Melhoria.ComboLeve: return $"Combo Leve — {level}º golpe";
+            case Melhoria.AtaquePesado: return level == 1 ? "Ataque Pesado" : $"Ataque Pesado — {level}º golpe";
+            default: return "Ataque Especial";
+        }
+    }
+
+    private string AutoDescription(int level)
+    {
+        switch (melhoria)
+        {
+            case Melhoria.ComboLeve: return $"Seu ataque rápido agora encadeia {level} golpes!";
+            case Melhoria.AtaquePesado:
+                return level == 1 ? "Botão direito do mouse: golpe pesado liberado!" : $"Seu ataque pesado agora encadeia {level} golpes!";
+            default: return "Tecla F ou E: tempestade de cortes liberada!";
+        }
     }
 
     private float OpenClipLength()

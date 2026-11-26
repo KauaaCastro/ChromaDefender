@@ -59,3 +59,20 @@ Este arquivo deve PERMANECER EM .GITIGNORE
 - Menu rápido no topo do Unity:
   - `Chroma Defender > Criar Boneco de Treino (Alvo de Dano)`
   - `Chroma Defender > Preparar Player da Cena`
+
+# Baús Escaláveis (`UpgradeChest.cs` + `BausEscalaveisCreator.cs`)
+- Cada cor de baú = uma habilidade, e cada baú dá o PRÓXIMO nível dela (campo `nivel` = 0):
+  - **Madeira** → Combo Leve (2 → 3 → 4 golpes)
+  - **Prata** → Ataque Pesado (bloqueado → 1 → 2 → 3 golpes)
+  - **Ouro** → Ataque Especial (bloqueado → liberado)
+- Habilidade já no máximo → o baú vira Elixir (cura toda a vida).
+- Progresso salvo em `GameProgress` (`LightComboHits`, `HeavyHits`, `WeaponArt`): vale ao morrer e ao trocar de cena.
+- `chestId` vazio = id automático (cena + posição). Prefabs em `Assets/Prefabs/Baus`.
+- Menu: `Chroma Defender > Baús > Criar ou atualizar prefabs de baú` / `Inserir Baú de ...`.
+
+# Cenários do Labirinto (`LabirintoCenariosCreator.cs`)
+- Um prefab `Cenario_<sala>` por sala em `Assets/Prefabs/LabirintoCastelo/Cenarios` (só visual, sem colisão).
+- Origem do prefab = canto inferior esquerdo INTERNO da sala. O `LabirintoCasteloBuilder` coloca sozinho.
+- Ordem de desenho: luz ambiente -19, parede -12/-11, chão -6, tapete -5 (tiles do fundo -20).
+- Regra: NÃO usar tochas na decoração — tocha acesa é a pista da porta certa.
+- Menu: `Chroma Defender > Labirinto do Castelo > 4. Criar ou Atualizar Cenários das Salas`.

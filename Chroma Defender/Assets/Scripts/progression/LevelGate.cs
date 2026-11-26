@@ -1,10 +1,17 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Passagem para outra fase (portão do castelo, poço mágico, saída do castelo...).
-/// Se exigir chave, mostra um cadeado animado que se abre quando o jogador chega com a chave.
+///
+/// Interação (padrão): o cavaleiro chega perto e aperta W / ↑ — igual aos baús.
+///  1. Trancado e sem chave  → aviso "Está trancado" + cadeado balança (só de encostar).
+///  2. Trancado e COM a chave → [W] Usar chave: cadeado abre, a grade do portão sobe.
+///  3. Aberto                 → [W] Entrar: o cavaleiro entra, a tela escurece e a próxima fase carrega.
+/// Desligando "requireInteract" volta ao modo antigo (abre/entra só de encostar).
+///
 /// Depois de aberto, fica aberto para sempre (flag salva em GameProgress).
 /// </summary>
 [RequireComponent(typeof(Collider2D))]
@@ -22,27 +29,47 @@ public class LevelGate : MonoBehaviour
     [SerializeField, TextArea] private string unlockMessage = "O cadeado se abriu!";
     [SerializeField, TextArea] private string enterMessage = "";
 
+    [Header("--- Interação ---")]
+    [Tooltip("Exige apertar W / ↑ para destrancar e para entrar. Desligado = só encostar.")]
+    [SerializeField] private bool requireInteract = true;
+    [Tooltip("Texto do aviso quando o portão está aberto. Vazio = \"[W] Entrar\".")]
+    [SerializeField] private string enterPrompt = "";
+    [Tooltip("Texto do aviso quando o jogador tem a chave. Vazio = \"[W] Usar <nome da chave>\".")]
+    [SerializeField] private string unlockPrompt = "";
+    [Tooltip("Altura do aviso acima do centro do portão.")]
+    [SerializeField] private float promptHeight = 2.1f;
+
     [Header("--- Visual do Cadeado ---")]
     [SerializeField] private SpriteRenderer padlockRenderer;
     [SerializeField] private Sprite[] padlockFrames;
     [SerializeField] private float padlockFps = 16f;
-    [Tooltip("Objetos escondidos ao destrancar (ex.: portão fechado).")]
+    [Tooltip("Objetos escondidos ao destrancar (ex.: grade do portão fechado). Eles SOBEM como uma grade levadiça antes de sumir.")]
     [SerializeField] private GameObject[] hideOnUnlock;
     [Tooltip("Objetos exibidos ao destrancar (ex.: portão aberto, brilho mágico).")]
     [SerializeField] private GameObject[] showOnUnlock;
 
-    [SerializeField] private float enterDelay = 0.6f;
+    [Header("--- Grade levadiça ---")]
+    [SerializeField] private float gateRaiseHeight = 2.6f;
+    [SerializeField] private float gateRaiseTime = 1.1f;
+
+    [Header("--- Entrada ---")]
+    [SerializeField] private float enterDelay = 0.35f;
+    [SerializeField] private float fadeOutTime = 0.7f;
     [Tooltip("Ignora o gatilho logo após a cena carregar (evita reentrar ao voltar de outra fase).")]
     [SerializeField] private float armDelay = 1.0f;
 
     private bool unlocked;
     private bool busy;
+    private bool playerInRange;
+    private PlayerBehavior player;
     private float nextLockedMsgTime;
     private float armedAt;
+    private GUIStyle promptStyle;
 
     private string UnlockFlag => $"portao_{requiredKeyId}_{targetScene}";
+    private bool NeedsKey => !string.IsNullOrEmpty(requiredKeyId);
 
-    public void Configure(string scene, string spawnId, string keyId, string locked, string unlockedMsg, string enterMsg)
+    public void Configure(string scene, string spawnId, string keyId, string locked, string unlockedMsg, string enterMsg, string prompt = "")
     {
         targetScene = scene;
         targetSpawnId = spawnId;
@@ -50,6 +77,7 @@ public class LevelGate : MonoBehaviour
         lockedMessage = locked;
         unlockMessage = unlockedMsg;
         enterMessage = enterMsg;
+        enterPrompt = prompt;
     }
 
     public void ConfigureVisuals(SpriteRenderer padlock, Sprite[] frames, GameObject[] hide, GameObject[] show)
@@ -70,35 +98,63 @@ public class LevelGate : MonoBehaviour
         GetComponent<Collider2D>().isTrigger = true;
         armedAt = Time.time + armDelay;
 
-        bool open = string.IsNullOrEmpty(requiredKeyId) || GameProgress.HasFlag(UnlockFlag);
+        bool open = !NeedsKey || GameProgress.HasFlag(UnlockFlag);
         unlocked = open;
         ApplyVisuals(open, instant: true);
     }
 
-    private void OnTriggerEnter2D(Collider2D other) => TryUse(other);
-    private void OnTriggerStay2D(Collider2D other) => TryUse(other);
+    // ---------------------------------------------------------------- Detecção do jogador
 
-    private void TryUse(Collider2D other)
+    private void OnTriggerEnter2D(Collider2D other) => OnPlayerTouch(other);
+    private void OnTriggerStay2D(Collider2D other) => OnPlayerTouch(other);
+
+    private void OnTriggerExit2D(Collider2D other)
     {
-        if (busy || Time.time < armedAt) return;
-        var player = other.GetComponentInParent<PlayerBehavior>();
+        if (other.GetComponentInParent<PlayerBehavior>() != null) playerInRange = false;
+    }
+
+    private void OnPlayerTouch(Collider2D other)
+    {
+        var p = other.GetComponentInParent<PlayerBehavior>();
+        if (p == null) return;
+        player = p;
+        playerInRange = true;
+
+        if (busy || Time.time < armedAt || p.IsDead) return;
+
+        if (!unlocked && !GameProgress.HasKey(requiredKeyId))
+        {
+            if (Time.time >= nextLockedMsgTime)
+            {
+                nextLockedMsgTime = Time.time + 3f;
+                ProgressHud.Toast(lockedMessage);
+                StartCoroutine(ShakePadlock());
+            }
+            return;
+        }
+
+        // Modo antigo: abre e entra só de encostar.
+        if (!requireInteract) Use();
+    }
+
+    private void Update()
+    {
+        if (!requireInteract || !playerInRange || busy || Time.time < armedAt) return;
         if (player == null || player.IsDead) return;
 
-        if (unlocked)
-        {
-            StartCoroutine(EnterRoutine());
-        }
-        else if (GameProgress.HasKey(requiredKeyId))
-        {
-            StartCoroutine(UnlockRoutine());
-        }
-        else if (Time.time >= nextLockedMsgTime)
-        {
-            nextLockedMsgTime = Time.time + 3f;
-            ProgressHud.Toast(lockedMessage);
-            StartCoroutine(ShakePadlock());
-        }
+        var kb = Keyboard.current;
+        bool pressed = kb != null && (kb.wKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame);
+        if (pressed) Use();
     }
+
+    private void Use()
+    {
+        if (busy) return;
+        if (unlocked) StartCoroutine(EnterRoutine());
+        else if (GameProgress.HasKey(requiredKeyId)) StartCoroutine(UnlockRoutine());
+    }
+
+    // ---------------------------------------------------------------- Destrancar
 
     private IEnumerator UnlockRoutine()
     {
@@ -119,13 +175,15 @@ public class LevelGate : MonoBehaviour
 
         unlocked = true;
         GameProgress.SetFlag(UnlockFlag);
-        ApplyVisuals(true, instant: false);
         if (!string.IsNullOrEmpty(unlockMessage)) ProgressHud.Toast(unlockMessage);
+        yield return ApplyVisualsAnimated();
 
-        yield return new WaitForSeconds(1.2f);
         busy = false;
-        // O jogador ainda está no gatilho → OnTriggerStay2D fará a entrada.
+        // Modo antigo: o jogador ainda está no gatilho → OnTriggerStay2D fará a entrada.
+        // Modo com tecla: o aviso muda para "[W] Entrar".
     }
+
+    // ---------------------------------------------------------------- Entrar
 
     private IEnumerator EnterRoutine()
     {
@@ -140,12 +198,44 @@ public class LevelGate : MonoBehaviour
         }
 
         if (!string.IsNullOrEmpty(enterMessage)) ProgressHud.Toast(enterMessage, 2f);
+
+        // O cavaleiro para, caminha até o centro do portão e some na escuridão.
+        if (player != null) StartCoroutine(PlayerWalkIn(player));
         yield return new WaitForSeconds(enterDelay);
+        yield return ScreenFader.FadeOut(fadeOutTime);
 
         GameProgress.PendingSpawnId = targetSpawnId;
         Time.timeScale = 1f;
         SceneManager.LoadScene(targetScene);
     }
+
+    private IEnumerator PlayerWalkIn(PlayerBehavior p)
+    {
+        var rb = p.GetComponent<Rigidbody2D>();
+        if (rb != null) rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
+        p.enabled = false; // trava os comandos durante a transição
+
+        var renderers = p.GetComponentsInChildren<SpriteRenderer>();
+        Vector3 start = p.transform.position;
+        Vector3 end = new Vector3(transform.position.x, start.y, start.z);
+        float t = 0f;
+        const float duration = 0.7f;
+        while (t < duration && p != null)
+        {
+            t += Time.deltaTime;
+            float k = Mathf.Clamp01(t / duration);
+            p.transform.position = new Vector3(Mathf.Lerp(start.x, end.x, k), p.transform.position.y, start.z);
+            foreach (var r in renderers)
+            {
+                if (r == null) continue;
+                Color c = r.color;
+                r.color = new Color(c.r, c.g, c.b, 1f - k * 0.85f);
+            }
+            yield return null;
+        }
+    }
+
+    // ---------------------------------------------------------------- Visual
 
     private void ApplyVisuals(bool open, bool instant)
     {
@@ -160,6 +250,68 @@ public class LevelGate : MonoBehaviour
             foreach (var go in hideOnUnlock) if (go != null) go.SetActive(!open);
         if (showOnUnlock != null)
             foreach (var go in showOnUnlock) if (go != null) go.SetActive(open);
+    }
+
+    /// <summary>Cadeado cai, portão aberto aparece por trás e a grade fechada sobe como uma grade levadiça.</summary>
+    private IEnumerator ApplyVisualsAnimated()
+    {
+        if (padlockRenderer != null) StartCoroutine(FadeOut(padlockRenderer));
+
+        if (showOnUnlock != null)
+            foreach (var go in showOnUnlock) if (go != null) go.SetActive(true);
+
+        if (hideOnUnlock == null || hideOnUnlock.Length == 0)
+        {
+            yield return new WaitForSeconds(0.6f);
+            yield break;
+        }
+
+        var starts = new Vector3[hideOnUnlock.Length];
+        for (int i = 0; i < hideOnUnlock.Length; i++)
+        {
+            var go = hideOnUnlock[i];
+            if (go == null) continue;
+            starts[i] = go.transform.position;
+            // A grade fica por cima do portão aberto enquanto sobe.
+            foreach (var sr in go.GetComponentsInChildren<SpriteRenderer>()) sr.sortingOrder += 1;
+        }
+
+        float t = 0f;
+        float duration = Mathf.Max(0.1f, gateRaiseTime);
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            float k = Mathf.Clamp01(t / duration);
+            float eased = k * k * (3f - 2f * k);
+            float shake = (1f - k) * 0.03f * Mathf.Sin(Time.time * 70f);
+            for (int i = 0; i < hideOnUnlock.Length; i++)
+            {
+                var go = hideOnUnlock[i];
+                if (go == null) continue;
+                go.transform.position = starts[i] + new Vector3(shake, eased * gateRaiseHeight, 0f);
+                float a = k < 0.7f ? 1f : 1f - (k - 0.7f) / 0.3f;
+                foreach (var sr in go.GetComponentsInChildren<SpriteRenderer>())
+                {
+                    Color c = sr.color;
+                    sr.color = new Color(c.r, c.g, c.b, a);
+                }
+            }
+            yield return null;
+        }
+
+        for (int i = 0; i < hideOnUnlock.Length; i++)
+        {
+            var go = hideOnUnlock[i];
+            if (go == null) continue;
+            go.SetActive(false);
+            go.transform.position = starts[i];
+            foreach (var sr in go.GetComponentsInChildren<SpriteRenderer>(true))
+            {
+                sr.sortingOrder -= 1;
+                Color c = sr.color;
+                sr.color = new Color(c.r, c.g, c.b, 1f);
+            }
+        }
     }
 
     private IEnumerator FadeOut(SpriteRenderer sr)
@@ -191,5 +343,47 @@ public class LevelGate : MonoBehaviour
             yield return null;
         }
         t.localPosition = origin;
+    }
+
+    // ---------------------------------------------------------------- Aviso na tela
+
+    private string CurrentPrompt()
+    {
+        if (unlocked) return string.IsNullOrEmpty(enterPrompt) ? "[W] Entrar" : enterPrompt;
+        if (GameProgress.HasKey(requiredKeyId))
+            return string.IsNullOrEmpty(unlockPrompt) ? $"[W] Usar {GameProgress.KeyDisplayName(requiredKeyId)}" : unlockPrompt;
+        return null; // trancado sem chave: só a mensagem de "trancado"
+    }
+
+    private void OnGUI()
+    {
+        if (!requireInteract || !playerInRange || busy || Time.time < armedAt) return;
+        if (player == null || player.IsDead) return;
+
+        string text = CurrentPrompt();
+        if (string.IsNullOrEmpty(text)) return;
+
+        var cam = Camera.main;
+        if (cam == null) return;
+        Vector3 screen = cam.WorldToScreenPoint(transform.position + Vector3.up * promptHeight);
+        if (screen.z < 0f) return;
+
+        if (promptStyle == null)
+        {
+            promptStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 18,
+                fontStyle = FontStyle.Bold,
+                richText = true
+            };
+        }
+
+        float bob = Mathf.Sin(Time.time * 4f) * 3f;
+        var rect = new Rect(screen.x - 160f, Screen.height - screen.y - 16f + bob, 320f, 32f);
+        promptStyle.normal.textColor = new Color(0f, 0f, 0f, 0.85f);
+        GUI.Label(new Rect(rect.x + 1.5f, rect.y + 1.5f, rect.width, rect.height), text, promptStyle);
+        promptStyle.normal.textColor = new Color(1f, 0.84f, 0.3f);
+        GUI.Label(rect, text, promptStyle);
     }
 }

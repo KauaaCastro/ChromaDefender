@@ -8,16 +8,20 @@ using UnityEngine;
 ///
 /// Fluxo planejado:
 ///  Fase 1 → derrota o Guardião (boss) → ganha a Chave do Castelo → entra no Castelo (Fase 2)
-///  Fase 2 → encontra a Chave do Poço → volta à Fase 1 → abre o cadeado do Poço → Área Mágica (Fase 3)
+///  Fase 2 → derrota o Mestre de Armas → ganha a Chave do Poço → volta à Fase 1 → abre o cadeado do Poço → Área Mágica (Fase 3)
+///  Fase 3 → derrota o Arquimago do Caos → tela de vitória
 /// </summary>
 public static class GameProgress
 {
     // --- Identificadores de chaves ---
     public const string KeyCastelo = "chave_castelo";
     public const string KeyPoco = "chave_poco";
+    public const string KeyLabirinto = "chave_labirinto";
 
     // --- Flags de mundo ---
     public const string FlagBossFase1 = "boss_fase1_derrotado";
+    public const string FlagBossFase2 = "boss_fase2_derrotado";
+    public const string FlagBossFase3 = "boss_fase3_derrotado";
 
     // --- Nomes das cenas ---
     public const string SceneFase1 = "SampleScene";
@@ -48,6 +52,26 @@ public static class GameProgress
         OnChanged?.Invoke();
     }
 
+    /// <summary>Golpes do ataque pesado liberados por baús (0 = ainda bloqueado, 1 a 3).</summary>
+    public static int HeavyHits { get; private set; }
+
+    /// <summary>Ataque especial (Weapon Art) liberado por baú de ouro.</summary>
+    public static bool WeaponArt { get; private set; }
+
+    public static void UnlockHeavy(int hits)
+    {
+        if (hits <= HeavyHits) return;
+        HeavyHits = hits;
+        OnChanged?.Invoke();
+    }
+
+    public static void UnlockWeaponArt()
+    {
+        if (WeaponArt) return;
+        WeaponArt = true;
+        OnChanged?.Invoke();
+    }
+
     public static IEnumerable<string> Keys => keys;
 
     public static bool HasKey(string keyId) => !string.IsNullOrEmpty(keyId) && keys.Contains(keyId);
@@ -72,6 +96,8 @@ public static class GameProgress
         keys.Clear();
         flags.Clear();
         LightComboHits = 0;
+        HeavyHits = 0;
+        WeaponArt = false;
         PendingSpawnId = null;
         OnChanged?.Invoke();
     }
@@ -82,6 +108,7 @@ public static class GameProgress
         {
             case KeyCastelo: return "Chave Dourada do Castelo";
             case KeyPoco: return "Chave de Prata do Poço";
+            case KeyLabirinto: return "Chave de Ferro do Labirinto";
             default: return keyId;
         }
     }
@@ -93,6 +120,8 @@ public static class GameProgress
         keys.Clear();
         flags.Clear();
         LightComboHits = 0;
+        HeavyHits = 0;
+        WeaponArt = false;
         PendingSpawnId = null;
         OnChanged = null;
     }

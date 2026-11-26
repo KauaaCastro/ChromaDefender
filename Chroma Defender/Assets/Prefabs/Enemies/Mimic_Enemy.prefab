@@ -265,3 +265,19 @@ MonoBehaviour:
   - {fileID: -270028788923616002, guid: 378e466289ee2ad48884bdb20ffa96f0, type: 3}
   deathFrameDuration: 0.08
   autoLoadSprites: 1
+  attackWindup: 0.28
+  attackLungeMultiplier: 1.3
+  attackTelegraph: 0
+  attackRecovery: 0.25
+  turnAroundDelay: 0
+  rangedAttack: 0
+  projectileSprites: []
+  projectileSpeed: 8
+  projectileScale: 1
+  projectileHoming: 0
+  projectileSpawnOffset: {x: 0.5, y: 0.6}
+  projectileUsesPolarity: 0
+  keepDistance: 0
+  blocksFrontalHits: 0
+  guardBreakDamage: 50
+  spriteBodyOffsetX: 0
