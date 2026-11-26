@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2309025325053867282
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7922010853873630415}
+  - component: {fileID: 6480239854175067674}
+  m_Layer: 0
+  m_Name: GameAudioManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7922010853873630415
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2309025325053867282}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6480239854175067674
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2309025325053867282}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7be63c5fc9e1da041bdd37283cb70056, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameAudioManager
+  bgmVolume: 0.38
+  sfxVolume: 0.75
+  muted: 0
+  bgmAtmosphereClip: {fileID: 8300000, guid: 68833d8bc05474e1d93203dc03c95271, type: 3}
+  fireSlashAsset: {fileID: 8300000, guid: 843b6d957c7904e05b141a997f4f60d3, type: 3}
+  iceSlashAsset: {fileID: 8300000, guid: c5a43a0c916c84edab3b9e88b9caac38, type: 3}
+  heavyImpactAsset: {fileID: 8300000, guid: 1f4b60439e6b2497781f487dfdfc4eb8, type: 3}
+  heavyIceImpactAsset: {fileID: 8300000, guid: 0781c81d2a8af43c484f05e760473544, type: 3}
+  fireSwitchAsset: {fileID: 8300000, guid: 38bc79ba3351e40d28224046aaa67990, type: 3}
+  iceSwitchAsset: {fileID: 8300000, guid: cca79881311ea4cc8ab781158c1982d2, type: 3}
+  jumpAsset: {fileID: 8300000, guid: 325dfb67dff64440391d61f0abb5bed9, type: 3}
+  rollAsset: {fileID: 8300000, guid: 2fc337dc6cbcf427e88611007d9e9f21, type: 3}
+  hurtAsset: {fileID: 8300000, guid: 5cee82438d9d94c04a46c94ddcb45835, type: 3}
+  healAsset: {fileID: 8300000, guid: 9ff9d050314524ff0be0aebc15ac6fbc, type: 3}
+  deathAsset: {fileID: 8300000, guid: 3bd870d9aef0f41dda092f6b7c5ead81, type: 3}
+  victoryAsset: {fileID: 8300000, guid: 5c2449d75faf742a0b74a3adc73a347b, type: 3}
+  respawnAsset: {fileID: 8300000, guid: 648705959360343639b993fefc0e9970, type: 3}
+  rewardAsset: {fileID: 8300000, guid: 7d9175b0f230c4f9fb0e85b6111cca99, type: 3}

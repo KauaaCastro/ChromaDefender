@@ -165,6 +165,18 @@ public class GameAudioManager : MonoBehaviour
 #endif
     }
 
+#if UNITY_EDITOR
+    /// <summary>
+    /// Chamado no Editor (e antes de gerar a Build) para preencher todos os AudioClips da pasta Assets
+    /// no componente antes de salvar o prefab em Resources/GameAudioManager.prefab.
+    /// </summary>
+    public void PopulateEditorAudioAssets()
+    {
+        LoadAssetsFromProject();
+        EditorUtility.SetDirty(this);
+    }
+#endif
+
     private void PrepareAllClips()
     {
         const int fallbackRate = 44100;
