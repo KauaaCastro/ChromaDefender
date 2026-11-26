@@ -40,6 +40,39 @@ public static class HudBuilder
         SetRect(healthLabel.rectTransform, new Vector2(0, 1), new Vector2(34, -78), new Vector2(200, 30), new Vector2(0, 1));
         healthLabel.color = new Color(1f, 0.8f, 0.8f);
 
+        // ---------- Técnica / Combo Leve (abaixo da Vida) ----------
+        var comboPanel = NewRect("PainelTecnica", canvasGo.transform, new Vector2(0, 1), new Vector2(30, -116), new Vector2(390, 44), new Vector2(0, 1));
+        var comboBorder = comboPanel.gameObject.AddComponent<Image>();
+        comboBorder.color = new Color(0.75f, 0.82f, 0.95f, 0.32f);
+        comboBorder.raycastTarget = false;
+
+        var comboInner = NewRect("Fundo", comboPanel, Vector2.zero, Vector2.zero, Vector2.zero);
+        comboInner.anchorMin = Vector2.zero; comboInner.anchorMax = Vector2.one;
+        comboInner.offsetMin = new Vector2(2, 2); comboInner.offsetMax = new Vector2(-2, -2);
+        var comboInnerImg = comboInner.gameObject.AddComponent<Image>();
+        comboInnerImg.color = new Color(0.04f, 0.04f, 0.08f, 0.88f);
+        comboInnerImg.raycastTarget = false;
+
+        var comboIconRt = NewRect("IconeEspada", comboPanel, new Vector2(0, 0.5f), new Vector2(24, 0), new Vector2(28, 28), new Vector2(0.5f, 0.5f));
+        var comboIcon = comboIconRt.gameObject.AddComponent<Image>();
+        comboIcon.preserveAspect = true;
+        comboIcon.raycastTarget = false;
+
+        var comboText = NewText("TextoTecnica", comboPanel, "ATAQUE LEVE: 2 GOLPES", 18, TextAnchor.MiddleLeft);
+        comboText.rectTransform.anchorMin = Vector2.zero;
+        comboText.rectTransform.anchorMax = Vector2.one;
+        comboText.rectTransform.offsetMin = new Vector2(46, 0);
+        comboText.rectTransform.offsetMax = new Vector2(-96, 0);
+
+        var pips = new Image[3];
+        for (int i = 0; i < 3; i++)
+        {
+            var pipRt = NewRect($"Golpe_{i + 1}", comboPanel, new Vector2(1, 0.5f), new Vector2(-72 + i * 26, 0), new Vector2(18, 18), new Vector2(0.5f, 0.5f));
+            var pipImg = pipRt.gameObject.AddComponent<Image>();
+            pipImg.raycastTarget = false;
+            pips[i] = pipImg;
+        }
+
         // ---------- Polaridade (canto superior direito) ----------
         var panel = NewRect("Polaridade", canvasGo.transform, new Vector2(1, 1), new Vector2(-40, -40), new Vector2(300, 220), new Vector2(1, 1));
 
@@ -62,6 +95,14 @@ public static class HudBuilder
         so.FindProperty("iceIcon").objectReferenceValue = iceIcon;
         so.FindProperty("glow").objectReferenceValue = glow;
         so.FindProperty("elementText").objectReferenceValue = label;
+        so.FindProperty("comboPanel").objectReferenceValue = comboPanel;
+        so.FindProperty("comboBorder").objectReferenceValue = comboBorder;
+        so.FindProperty("comboIcon").objectReferenceValue = comboIcon;
+        so.FindProperty("comboText").objectReferenceValue = comboText;
+        var pipsProp = so.FindProperty("comboPips");
+        pipsProp.arraySize = 3;
+        for (int i = 0; i < 3; i++)
+            pipsProp.GetArrayElementAtIndex(i).objectReferenceValue = pips[i];
         so.ApplyModifiedProperties();
 
         Selection.activeGameObject = canvasGo;
