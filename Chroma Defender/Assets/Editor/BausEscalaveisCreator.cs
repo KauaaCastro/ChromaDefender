@@ -24,9 +24,9 @@ public static class BausEscalaveisCreator
     public static void CreateAll()
     {
         if (!AssetDatabase.IsValidFolder(Dir)) { Directory.CreateDirectory(Dir); AssetDatabase.Refresh(); }
-        Save(Build(Madeira, "Wooden", UpgradeChest.Melhoria.ComboLeve));
-        Save(Build(Prata, "Silver", UpgradeChest.Melhoria.AtaquePesado));
-        Save(Build(Ouro, "Golden", UpgradeChest.Melhoria.Especial));
+        Save(Build(Madeira, "Wooden", UpgradeChest.UpgradeKind.LightCombo));
+        Save(Build(Prata, "Silver", UpgradeChest.UpgradeKind.HeavyAttack));
+        Save(Build(Ouro, "Golden", UpgradeChest.UpgradeKind.WeaponArt));
         AssetDatabase.SaveAssets();
         Debug.Log("<color=lime>[Baús]</color> Prefabs criados em " + Dir + " (Madeira = Combo Leve, Prata = Ataque Pesado, Ouro = Especial).");
     }
@@ -53,7 +53,7 @@ public static class BausEscalaveisCreator
         Selection.activeGameObject = inst;
     }
 
-    private static GameObject Build(string name, string cainosColor, UpgradeChest.Melhoria melhoria)
+    private static GameObject Build(string name, string cainosColor, UpgradeChest.UpgradeKind kind)
     {
         var src = AssetDatabase.LoadAssetAtPath<GameObject>(CainosDir + cainosColor + ".prefab");
         var srcAnim = src != null ? src.GetComponent<Animator>() : null;
@@ -80,10 +80,11 @@ public static class BausEscalaveisCreator
         var chest = go.AddComponent<UpgradeChest>();
         var so = new SerializedObject(chest);
         LabirintoCasteloPresets.Set(so, "chestId", "");
-        LabirintoCasteloPresets.Set(so, "melhoria", (int)melhoria);
-        LabirintoCasteloPresets.Set(so, "nivel", 0);
-        LabirintoCasteloPresets.Set(so, "rewardTitle", "");
-        LabirintoCasteloPresets.Set(so, "rewardDescription", "");
+        LabirintoCasteloPresets.Set(so, "upgradeKind", (int)kind);
+        LabirintoCasteloPresets.Set(so, "lightComboHits", 3);
+        LabirintoCasteloPresets.Set(so, "heavyComboHits", 1);
+        LabirintoCasteloPresets.Set(so, "rewardTitle", kind == UpgradeChest.UpgradeKind.LightCombo ? "Combo Leve — 3º golpe" : kind == UpgradeChest.UpgradeKind.HeavyAttack ? "Ataque Pesado" : "Ataque Especial");
+        LabirintoCasteloPresets.Set(so, "rewardDescription", kind == UpgradeChest.UpgradeKind.LightCombo ? "Seu ataque rápido agora encadeia 3 golpes!" : kind == UpgradeChest.UpgradeKind.HeavyAttack ? "Botão direito do mouse: golpe pesado liberado!" : "Tecla F ou E: tempestade de cortes liberada!");
         LabirintoCasteloPresets.Set(so, "animator", anim);
         so.ApplyModifiedPropertiesWithoutUndo();
         return go;

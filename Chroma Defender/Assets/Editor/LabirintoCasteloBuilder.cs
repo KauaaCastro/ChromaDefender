@@ -392,6 +392,9 @@ public static class LabirintoCasteloBuilder
         // Id fixo por sala: o baú continua "aberto" mesmo se o labirinto for reconstruído em outra posição
         var so = new SerializedObject(chest);
         LabirintoCasteloPresets.Set(so, "chestId", $"labirinto_{r.key}_{chestPrefab}");
+        // Nível deste baú na progressão do labirinto (sobrepõe o padrão do prefab)
+        if (chestPrefab == BausEscalaveisCreator.Madeira) LabirintoCasteloPresets.Set(so, "lightComboHits", 4);
+        if (chestPrefab == BausEscalaveisCreator.Prata) LabirintoCasteloPresets.Set(so, "heavyComboHits", 2);
         so.ApplyModifiedProperties();
     }
 

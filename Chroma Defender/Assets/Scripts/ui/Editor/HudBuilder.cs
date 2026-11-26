@@ -36,12 +36,15 @@ public static class HudBuilder
         fill.gameObject.AddComponent<Image>().color = new Color(0.85f, 0.15f, 0.2f);
         var healthText = NewText("TextoVida", bar, "100/100", 26, TextAnchor.MiddleCenter);
         Stretch(healthText.rectTransform);
-        var healthLabel = NewText("RotuloVida", canvasGo.transform, "VIDA", 22, TextAnchor.LowerLeft);
-        SetRect(healthLabel.rectTransform, new Vector2(0, 1), new Vector2(34, -78), new Vector2(200, 30), new Vector2(0, 1));
+        var healthLabel = NewText("RotuloVida", bar, "VIDA", 22, TextAnchor.MiddleLeft);
+        healthLabel.rectTransform.anchorMin = Vector2.zero;
+        healthLabel.rectTransform.anchorMax = Vector2.one;
+        healthLabel.rectTransform.offsetMin = new Vector2(14, 0);
+        healthLabel.rectTransform.offsetMax = new Vector2(-14, 0);
         healthLabel.color = new Color(1f, 0.8f, 0.8f);
 
         // ---------- Técnica / Combo Leve (abaixo da Vida) ----------
-        var comboPanel = NewRect("PainelTecnica", canvasGo.transform, new Vector2(0, 1), new Vector2(30, -116), new Vector2(390, 44), new Vector2(0, 1));
+        var comboPanel = NewRect("PainelTecnica", canvasGo.transform, new Vector2(0, 1), new Vector2(30, -82), new Vector2(390, 44), new Vector2(0, 1));
         var comboBorder = comboPanel.gameObject.AddComponent<Image>();
         comboBorder.color = new Color(0.75f, 0.82f, 0.95f, 0.32f);
         comboBorder.raycastTarget = false;
@@ -107,6 +110,28 @@ public static class HudBuilder
 
         Selection.activeGameObject = canvasGo;
         EditorSceneManager.MarkSceneDirty(canvasGo.scene);
+    }
+
+    [MenuItem("Chroma Defender/Testar HUD: Desbloquear Todas as Técnicas")]
+    public static void UnlockAllForTest()
+    {
+        var player = Object.FindFirstObjectByType<PlayerBehavior>();
+        GameProgress.UnlockLightCombo(3);
+        GameProgress.UnlockHeavyCombo(3);
+        GameProgress.UnlockWeaponArt();
+
+        if (player != null)
+        {
+            player.UpgradeLightCombo(3);
+            player.UnlockHeavyAttack(3);
+            player.UnlockWeaponArt();
+        }
+
+        if (HudController.Instance != null)
+            HudController.Instance.RefreshCombo();
+
+        if (Application.isPlaying)
+            ProgressHud.Toast("Teste de HUD: <color=#FFD54A>Todas as Técnicas Desbloqueadas!</color>\nCombo Nv. 3, Ataque Pesado (Botão Direito) e Supremo (F/E) ativos!", 4.5f);
     }
 
     // Slot = moldura redonda + ícone por cima

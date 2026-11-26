@@ -36,6 +36,16 @@ public class HudController : MonoBehaviour
     [SerializeField] private Text comboText;
     [SerializeField] private Image[] comboPips;
 
+    [Header("Técnicas Extras: Ataque Pesado e Supremo")]
+    [SerializeField] private RectTransform heavySlot;
+    [SerializeField] private Image heavyBorder;
+    [SerializeField] private Image heavyIcon;
+    [SerializeField] private Text heavyText;
+    [SerializeField] private RectTransform specialSlot;
+    [SerializeField] private Image specialBorder;
+    [SerializeField] private Image specialIcon;
+    [SerializeField] private Text specialText;
+
     private static readonly Color FireColor = new Color(1f, 0.45f, 0.1f);
     private static readonly Color IceColor = new Color(0.35f, 0.82f, 1f);
     private static readonly Color GoldColor = new Color(1f, 0.84f, 0.28f);
@@ -44,7 +54,11 @@ public class HudController : MonoBehaviour
     private ElementPolarity current = ElementPolarity.Fire;
     private float pop; // 1 -> 0 logo após trocar, para o efeito de "pulo"
     private float comboPop;
+    private float heavyPop;
+    private float specialPop;
     private int lastComboHits = -1;
+    private int lastHeavyHits = -1;
+    private bool lastSpecialUnlocked;
 
     private void Awake()
     {
@@ -125,9 +139,14 @@ public class HudController : MonoBehaviour
     {
         pop = Mathf.MoveTowards(pop, 0f, Time.unscaledDeltaTime * 3.5f);
         comboPop = Mathf.MoveTowards(comboPop, 0f, Time.unscaledDeltaTime * 2.8f);
+        heavyPop = Mathf.MoveTowards(heavyPop, 0f, Time.unscaledDeltaTime * 2.8f);
+        specialPop = Mathf.MoveTowards(specialPop, 0f, Time.unscaledDeltaTime * 2.8f);
 
         int currentHits = GetUnlockedComboHits();
-        if (currentHits != lastComboHits) RefreshCombo();
+        int currentHeavy = GetUnlockedHeavyHits();
+        bool currentSpecial = GetWeaponArtUnlocked();
+        if (currentHits != lastComboHits || currentHeavy != lastHeavyHits || currentSpecial != lastSpecialUnlocked)
+            RefreshCombo();
 
         ApplyVisuals(Time.unscaledDeltaTime * 14f);
     }
@@ -138,6 +157,19 @@ public class HudController : MonoBehaviour
         if (player != null) hits = Mathf.Max(hits, player.UnlockedLightHits);
         if (GameProgress.LightComboHits > hits) hits = GameProgress.LightComboHits;
         return Mathf.Clamp(hits, 2, 4);
+    }
+
+    private int GetUnlockedHeavyHits()
+    {
+        int hits = GameProgress.HeavyComboHits;
+        if (player != null && player.IsHeavyAttackUnlocked)
+            hits = Mathf.Max(hits, Mathf.Max(1, player.UnlockedHeavyHits));
+        return Mathf.Clamp(hits, 0, 3);
+    }
+
+    private bool GetWeaponArtUnlocked()
+    {
+        return GameProgress.WeaponArtUnlocked || (player != null && player.IsWeaponArtUnlocked);
     }
 
     public void RefreshCombo()
@@ -176,6 +208,54 @@ public class HudController : MonoBehaviour
                 comboPips[i].rectTransform.localScale = Vector3.one * (active ? (bonusPip ? 1.15f : 1f) : 0.82f);
             }
         }
+
+        // --- Ataque Pesado ---
+        int heavyHits = GetUnlockedHeavyHits();
+        if (lastHeavyHits >= 0 && heavyHits > lastHeavyHits) heavyPop = 1f;
+        lastHeavyHits = heavyHits;
+        bool heavyUnlocked = heavyHits > 0;
+        if (heavyText != null)
+        {
+            heavyText.text = heavyUnlocked
+                ? (heavyHits > 1 ? $"PESADO NV.{heavyHits} ★" : "PESADO [DIR] ★")
+                : "PESADO: BLOQ.";
+            heavyText.color = heavyUnlocked ? GoldColor : new Color(0.55f, 0.60f, 0.70f, 0.75f);
+        }
+        if (heavyBorder != null)
+        {
+            heavyBorder.color = heavyUnlocked
+                ? new Color(1f, 0.82f, 0.25f, 0.75f)
+                : new Color(0.45f, 0.50f, 0.60f, 0.25f);
+        }
+        if (heavyIcon != null)
+        {
+            heavyIcon.sprite = HudSprites.Sword;
+            heavyIcon.color = heavyUnlocked ? Color.white : new Color(0.45f, 0.48f, 0.55f, 0.5f);
+        }
+
+        // --- Ataque Especial / Supremo ---
+        bool specialUnlocked = GetWeaponArtUnlocked();
+        if (!lastSpecialUnlocked && specialUnlocked && lastHeavyHits >= 0) specialPop = 1f;
+        lastSpecialUnlocked = specialUnlocked;
+        if (specialText != null)
+        {
+            specialText.text = specialUnlocked ? "SUPREMO [F/E] ★" : "SUPREMO: BLOQ.";
+            specialText.color = specialUnlocked
+                ? (current == ElementPolarity.Fire ? FireColor : IceColor)
+                : new Color(0.55f, 0.60f, 0.70f, 0.75f);
+        }
+        if (specialBorder != null)
+        {
+            Color elem = current == ElementPolarity.Fire ? FireColor : IceColor;
+            specialBorder.color = specialUnlocked
+                ? new Color(elem.r, elem.g, elem.b, 0.8f)
+                : new Color(0.45f, 0.50f, 0.60f, 0.25f);
+        }
+        if (specialIcon != null)
+        {
+            specialIcon.sprite = current == ElementPolarity.Fire ? HudSprites.Flame : HudSprites.Ice;
+            specialIcon.color = specialUnlocked ? Color.white : new Color(0.45f, 0.48f, 0.55f, 0.5f);
+        }
     }
 
     private void ApplyVisuals(float lerp)
@@ -189,6 +269,25 @@ public class HudController : MonoBehaviour
         {
             float s = 1f + 0.22f * Mathf.Sin(comboPop * Mathf.PI);
             comboPanel.localScale = Vector3.Lerp(comboPanel.localScale, Vector3.one * s, Mathf.Clamp01(lerp));
+        }
+
+        if (heavySlot != null)
+        {
+            float s = 1f + 0.24f * Mathf.Sin(heavyPop * Mathf.PI);
+            heavySlot.localScale = Vector3.Lerp(heavySlot.localScale, Vector3.one * s, Mathf.Clamp01(lerp));
+        }
+
+        if (specialSlot != null)
+        {
+            float s = 1f + 0.24f * Mathf.Sin(specialPop * Mathf.PI);
+            specialSlot.localScale = Vector3.Lerp(specialSlot.localScale, Vector3.one * s, Mathf.Clamp01(lerp));
+            if (lastSpecialUnlocked)
+            {
+                Color elem = fire ? FireColor : IceColor;
+                if (specialIcon != null) specialIcon.sprite = fire ? HudSprites.Flame : HudSprites.Ice;
+                if (specialText != null) specialText.color = Color.Lerp(specialText.color, elem, Mathf.Clamp01(lerp));
+                if (specialBorder != null) specialBorder.color = Color.Lerp(specialBorder.color, new Color(elem.r, elem.g, elem.b, 0.8f), Mathf.Clamp01(lerp));
+            }
         }
 
         if (comboPips != null)
@@ -219,19 +318,26 @@ public class HudController : MonoBehaviour
 
     private void EnsureComboPanel()
     {
-        if (comboPanel != null) return;
-
         Font font = (healthText != null && healthText.font != null)
             ? healthText.font
             : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
-        // Cria o painel de Técnica/Combo abaixo do rótulo VIDA no canto superior esquerdo
+        MoveHealthLabelInsideBar();
+
+        if (comboPanel != null)
+        {
+            comboPanel.anchoredPosition = new Vector2(30f, -82f);
+            EnsureExtraTechniqueSlots(font);
+            return;
+        }
+
+        // Cria o painel de Técnica/Combo logo abaixo da BarraVida no canto superior esquerdo
         var borderGo = new GameObject("PainelTecnica", typeof(RectTransform), typeof(Image));
         borderGo.transform.SetParent(transform, false);
         comboPanel = borderGo.GetComponent<RectTransform>();
         comboPanel.anchorMin = comboPanel.anchorMax = new Vector2(0f, 1f);
         comboPanel.pivot = new Vector2(0f, 1f);
-        comboPanel.anchoredPosition = new Vector2(30f, -116f);
+        comboPanel.anchoredPosition = new Vector2(30f, -82f);
         comboPanel.sizeDelta = new Vector2(390f, 44f);
         comboBorder = borderGo.GetComponent<Image>();
         comboBorder.color = new Color(0.75f, 0.82f, 0.95f, 0.32f);
@@ -294,6 +400,117 @@ public class HudController : MonoBehaviour
             img.raycastTarget = false;
             comboPips[i] = img;
         }
+
+        EnsureExtraTechniqueSlots(font);
+    }
+
+    private void MoveHealthLabelInsideBar()
+    {
+        Transform barTransform = healthText != null ? healthText.transform.parent : transform.Find("BarraVida");
+        if (barTransform == null) return;
+
+        Transform labelTransform = transform.Find("RotuloVida");
+        if (labelTransform == null) labelTransform = barTransform.Find("RotuloVida");
+        if (labelTransform == null) return;
+
+        if (labelTransform.parent != barTransform)
+            labelTransform.SetParent(barTransform, false);
+
+        var rt = labelTransform.GetComponent<RectTransform>();
+        if (rt != null)
+        {
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = new Vector2(14f, 0f);
+            rt.offsetMax = new Vector2(-14f, 0f);
+        }
+
+        var txt = labelTransform.GetComponent<Text>();
+        if (txt != null)
+        {
+            txt.alignment = TextAnchor.MiddleLeft;
+            txt.color = new Color(1f, 0.8f, 0.8f);
+        }
+    }
+
+    private void EnsureExtraTechniqueSlots(Font font)
+    {
+        if (heavySlot == null)
+        {
+            heavySlot = CreateMiniSkillSlot("SlotPesado", new Vector2(30f, -132f), new Vector2(190f, 38f),
+                HudSprites.Sword, "PESADO: BLOQ.", font, out heavyBorder, out heavyIcon, out heavyText);
+        }
+        else
+        {
+            heavySlot.anchoredPosition = new Vector2(30f, -132f);
+        }
+
+        if (specialSlot == null)
+        {
+            specialSlot = CreateMiniSkillSlot("SlotSupremo", new Vector2(230f, -132f), new Vector2(190f, 38f),
+                HudSprites.Flame, "SUPREMO: BLOQ.", font, out specialBorder, out specialIcon, out specialText);
+        }
+        else
+        {
+            specialSlot.anchoredPosition = new Vector2(230f, -132f);
+        }
+    }
+
+    private RectTransform CreateMiniSkillSlot(string name, Vector2 pos, Vector2 size, Sprite sprite, string label,
+        Font font, out Image border, out Image icon, out Text text)
+    {
+        var borderGo = new GameObject(name, typeof(RectTransform), typeof(Image));
+        borderGo.transform.SetParent(transform, false);
+        var rt = borderGo.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot = new Vector2(0f, 1f);
+        rt.anchoredPosition = pos;
+        rt.sizeDelta = size;
+        border = borderGo.GetComponent<Image>();
+        border.color = new Color(0.45f, 0.50f, 0.60f, 0.25f);
+        border.raycastTarget = false;
+
+        var innerGo = new GameObject("Fundo", typeof(RectTransform), typeof(Image));
+        innerGo.transform.SetParent(rt, false);
+        var innerRt = innerGo.GetComponent<RectTransform>();
+        innerRt.anchorMin = Vector2.zero;
+        innerRt.anchorMax = Vector2.one;
+        innerRt.offsetMin = new Vector2(2f, 2f);
+        innerRt.offsetMax = new Vector2(-2f, -2f);
+        var innerImg = innerGo.GetComponent<Image>();
+        innerImg.color = new Color(0.04f, 0.04f, 0.08f, 0.85f);
+        innerImg.raycastTarget = false;
+
+        var iconGo = new GameObject("Icone", typeof(RectTransform), typeof(Image));
+        iconGo.transform.SetParent(rt, false);
+        var iconRt = iconGo.GetComponent<RectTransform>();
+        iconRt.anchorMin = iconRt.anchorMax = new Vector2(0f, 0.5f);
+        iconRt.pivot = new Vector2(0.5f, 0.5f);
+        iconRt.anchoredPosition = new Vector2(20f, 0f);
+        iconRt.sizeDelta = new Vector2(22f, 22f);
+        icon = iconGo.GetComponent<Image>();
+        icon.sprite = sprite;
+        icon.preserveAspect = true;
+        icon.raycastTarget = false;
+
+        var textGo = new GameObject("Texto", typeof(RectTransform), typeof(Text), typeof(Outline));
+        textGo.transform.SetParent(rt, false);
+        var textRt = textGo.GetComponent<RectTransform>();
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.offsetMin = new Vector2(36f, 0f);
+        textRt.offsetMax = new Vector2(-6f, 0f);
+        text = textGo.GetComponent<Text>();
+        text.font = font;
+        text.fontSize = 15;
+        text.fontStyle = FontStyle.Bold;
+        text.alignment = TextAnchor.MiddleLeft;
+        text.color = new Color(0.55f, 0.60f, 0.70f, 0.75f);
+        text.raycastTarget = false;
+        textGo.GetComponent<Outline>().effectColor = new Color(0f, 0f, 0f, 0.85f);
+
+        return rt;
     }
 
     private static void UpdateSlot(RectTransform slot, Image frame, Image icon, bool active, Color color, float overshoot, float lerp)
