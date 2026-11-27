@@ -43,6 +43,8 @@ public class UpgradeChest : MonoBehaviour
     [SerializeField] private string keyId = GameProgress.KeyAreaB2;
     [SerializeField] private string rewardTitle = "Combo Leve — 3º golpe";
     [SerializeField] private string rewardDescription = "Seu ataque rápido agora encadeia 3 golpes!";
+    [Tooltip("Mensagem quando o jogador já tem o que o baú daria (baú vazio).")]
+    [SerializeField] private string emptyMessage = "Tem nada aqui kk";
 
     [Header("--- Interação ---")]
     [Tooltip("Abre sozinho ao encostar, sem apertar nada.")]
@@ -171,10 +173,8 @@ public class UpgradeChest : MonoBehaviour
 
         if (AlreadyHas())
         {
-            // Já dominada: o baú vira um elixir e restaura a vida toda.
-            if (player != null) player.Heal(player.MaxHealth);
-            FireVFX.SpawnFlameBurst(transform.position + Vector3.up * 0.7f, 22);
-            ProgressHud.Toast("Baú aberto! <color=#FFD54A>Elixir Restaurador</color>\nVocê já domina essa técnica. Vida restaurada!", 4.5f);
+            // Já dominada: o baú está vazio (sem cura, sem recompensa).
+            ProgressHud.Toast(emptyMessage, 3f);
             return;
         }
 

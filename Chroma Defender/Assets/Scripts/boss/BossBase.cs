@@ -90,6 +90,7 @@ public abstract class BossBase : MonoBehaviour, IDamageableTarget
     protected float clipTime;
 
     public bool IsDead => isDead;
+    public bool IsAwake => isAwake;
     protected bool Enraged => currentHealth <= maxHealth * 0.5f;
     protected float Health01 => (float)currentHealth / Mathf.Max(1, maxHealth);
     protected ElementPolarity RequiredElement => shield == ElementPolarity.Fire ? ElementPolarity.Ice : ElementPolarity.Fire;
@@ -191,6 +192,8 @@ public abstract class BossBase : MonoBehaviour, IDamageableTarget
     protected virtual void OnDeathStarted() { }
     /// <summary>Retorne falso para ignorar golpes (ex.: durante o teletransporte).</summary>
     protected virtual bool CanTakeDamage() => true;
+    /// <summary>Chamado antes de tudo em TakeDamage. Retorne true para consumir o golpe (ex.: defesa que exige um tipo de golpe).</summary>
+    protected virtual bool InterceptHit(int damage, ElementPolarity attackPolarity) => false;
     /// <summary>Permite multiplicar o dano recebido (ex.: atordoado toma mais dano).</summary>
     protected virtual int ModifyIncomingDamage(int damage) => damage;
     protected virtual bool ContactDamageActive => true;
@@ -234,6 +237,8 @@ public abstract class BossBase : MonoBehaviour, IDamageableTarget
     {
         if (isDead) return;
         if (!isAwake) Awaken();
+
+        if (InterceptHit(damage, attackPolarity)) return;
 
         if (!CanTakeDamage())
         {

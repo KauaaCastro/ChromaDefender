@@ -489,14 +489,7 @@ public class PlayerBehavior : MonoBehaviour
         // Queda para fora do mapa / abismo: aciona morte (mostra tela de Game Over) e renasce no checkpoint
         if (transform.position.y < -15f)
         {
-            currentHealth = 0;
-            OnHealthChanged?.Invoke(0, maxHealth);
-            Die();
-            if (rb != null)
-            {
-                rb.linearVelocity = Vector2.zero;
-                rb.simulated = false;
-            }
+            KillByFall();
             return;
         }
 
@@ -928,7 +921,33 @@ public class PlayerBehavior : MonoBehaviour
     private IEnumerator RestoreEnemyCollisionsDelayed()
     {
         yield return new WaitForSeconds(0.12f);
-        IgnoreEnemiesCollision(false);
+
+        // Religa cada colisão só depois que o cavaleiro SAIU de dentro daquele inimigo.
+        // Religar com os colisores sobrepostos (ex.: rolar por baixo de um chefe gigante) fazia a física
+        // empurrar o cavaleiro para dentro do chão, e ele caía no vazio.
+        while (ignoredRollColliders.Count > 0)
+        {
+            if (action == ActionState.Roll) { yield return null; continue; } // novo rolamento: espera ele acabar
+            for (int i = ignoredRollColliders.Count - 1; i >= 0; i--)
+            {
+                var col = ignoredRollColliders[i];
+                if (col != null && col.enabled && col.gameObject.activeInHierarchy && OverlapsPlayer(col)) continue;
+                if (col != null)
+                {
+                    foreach (var pCol in GetComponentsInChildren<Collider2D>())
+                        if (pCol != null && pCol.enabled) Physics2D.IgnoreCollision(pCol, col, false);
+                }
+                ignoredRollColliders.RemoveAt(i);
+            }
+            yield return null;
+        }
+    }
+
+    private bool OverlapsPlayer(Collider2D other)
+    {
+        if (playerCollider == null || !playerCollider.enabled) return false;
+        var d = playerCollider.Distance(other);
+        return d.isValid && d.distance < 0.02f;
     }
 
     private bool IsEnemyCollider(Collider2D col)
@@ -1201,6 +1220,7 @@ public class PlayerBehavior : MonoBehaviour
             if (target != null)
             {
                 Vector2 knockback = new Vector2(facing * knockbackX, knockbackY);
+                LastHitKind = (type == AttackType.Heavy1 || type == AttackType.Heavy2 || type == AttackType.Heavy3) ? HitKind.Heavy : HitKind.Light;
                 target.TakeDamage(WithDamageBonus(damage), knockback, currentPolarity);
             }
         }
@@ -1252,6 +1272,7 @@ public class PlayerBehavior : MonoBehaviour
             {
                 // Knockback sutil prendendo o alvo na tempestade de golpes
                 Vector2 knockback = new Vector2(facing * 0.8f, 0f);
+                LastHitKind = HitKind.Special;
                 target.TakeDamage(WithDamageBonus(specialFlurryDamage), knockback, currentPolarity);
             }
         }
@@ -1272,10 +1293,34 @@ public class PlayerBehavior : MonoBehaviour
             if (target != null)
             {
                 Vector2 knockback = new Vector2(facing * specialFinisherKnockback, 3.5f);
+                LastHitKind = HitKind.Special;
                 target.TakeDamage(WithDamageBonus(specialFinisherDamage), knockback, currentPolarity);
             }
         }
     }
+
+    /// <summary>
+    /// Morte por queda (abismo): zera a vida, aciona a morte (Game Over → renasce no checkpoint) e congela a física.
+    /// Usada pela regra de altura mínima e pelas zonas de morte (DeathZone) no fundo dos buracos.
+    /// </summary>
+    public void KillByFall()
+    {
+        if (IsDead) return;
+        currentHealth = 0;
+        OnHealthChanged?.Invoke(0, maxHealth);
+        Die();
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            rb.simulated = false;
+        }
+    }
+
+    /// <summary>Tipo do golpe que está acertando agora (lido por chefes que exigem golpes específicos).</summary>
+    public enum HitKind { Light, Heavy, Special }
+
+    /// <summary>Tipo do último golpe do cavaleiro que chegou a um alvo (definido antes de cada TakeDamage).</summary>
+    public static HitKind LastHitKind { get; private set; } = HitKind.Light;
 
     /// <summary>Aplica o bônus de dano permanente (baú da Torre de Escalada) a um golpe.</summary>
     private static int WithDamageBonus(int damage) => Mathf.RoundToInt(damage * GameProgress.DamageMultiplier);

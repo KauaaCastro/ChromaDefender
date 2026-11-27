@@ -10,6 +10,10 @@ public class CameraZone : MonoBehaviour
 {
     [Tooltip("Largura x altura da área visível (unidades do mundo), centrada neste objeto.")]
     [SerializeField] private Vector2 size = new Vector2(40f, 20f);
+    [Tooltip("Zoom da câmera (meia-altura da vista) dentro desta área. 0 = mantém o zoom normal. Ex.: 7.5 numa sala de chefe gigante.")]
+    [SerializeField] private float orthoSize = 0f;
+
+    public float OrthoSize => orthoSize;
 
     private static readonly List<CameraZone> zones = new List<CameraZone>();
 

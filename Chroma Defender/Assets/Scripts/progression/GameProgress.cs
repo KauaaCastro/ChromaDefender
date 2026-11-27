@@ -18,6 +18,7 @@ public static class GameProgress
     public const string KeyPoco = "chave_poco";
     public const string KeyLabirinto = "chave_labirinto";
     public const string KeyAreaB2 = "chave_area_b2";
+    public const string KeyRunica = "chave_runica";
 
     // --- Flags de mundo ---
     public const string FlagBossFase1 = "boss_fase1_derrotado";
@@ -126,6 +127,7 @@ public static class GameProgress
             case KeyPoco: return "Chave de Prata do Poço";
             case KeyLabirinto: return "Chave de Ferro do Labirinto";
             case KeyAreaB2: return "Chave da Área B2";
+            case KeyRunica: return "Chave Rúnica";
             default: return keyId;
         }
     }

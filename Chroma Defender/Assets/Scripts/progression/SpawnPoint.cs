@@ -18,10 +18,16 @@ public class SpawnPoint : MonoBehaviour
         isDefaultSpawn = isDefault;
     }
 
+    // Lido no Awake (antes de qualquer Start): o ponto de chegada certo limpa o PendingSpawnId no Start dele,
+    // e sem isto um ponto "padrão" que rodasse o Start depois achava que era Play direto e movia o jogador de novo.
+    private string pendingAtLoad;
+
+    private void Awake() => pendingAtLoad = GameProgress.PendingSpawnId;
+
     private IEnumerator Start()
     {
-        bool arriving = !string.IsNullOrEmpty(spawnId) && GameProgress.PendingSpawnId == spawnId;
-        bool directPlay = isDefaultSpawn && string.IsNullOrEmpty(GameProgress.PendingSpawnId);
+        bool arriving = !string.IsNullOrEmpty(spawnId) && pendingAtLoad == spawnId;
+        bool directPlay = isDefaultSpawn && string.IsNullOrEmpty(pendingAtLoad);
         if (!arriving && !directPlay) yield break;
         if (arriving) GameProgress.PendingSpawnId = null;
 
@@ -31,17 +37,33 @@ public class SpawnPoint : MonoBehaviour
         var player = FindFirstObjectByType<PlayerBehavior>();
         if (player == null) yield break;
 
-        player.transform.position = transform.position;
+        Vector3 target = GroundedPosition(player);
+        player.transform.position = target;
         var rb = player.GetComponent<Rigidbody2D>();
-        if (rb != null) rb.linearVelocity = Vector2.zero;
-        player.SetSafeSpawnPosition(transform.position);
+        if (rb != null) { rb.position = target; rb.linearVelocity = Vector2.zero; }
+        player.SetSafeSpawnPosition(target);
 
         var cam = Camera.main;
         if (cam != null)
         {
             Vector3 p = cam.transform.position;
-            cam.transform.position = new Vector3(transform.position.x, transform.position.y + 1.2f, p.z);
+            cam.transform.position = new Vector3(target.x, target.y + 1.2f, p.z);
         }
+    }
+
+    /// <summary>
+    /// Posição do jogador com os PÉS apoiados no chão logo abaixo deste ponto (o pivô do cavaleiro fica acima dos pés;
+    /// usar a posição crua deixava os pés dentro do chão e ele "afundava" no colisor).
+    /// </summary>
+    private Vector3 GroundedPosition(PlayerBehavior player)
+    {
+        var col = player.GetComponent<Collider2D>();
+        if (col == null) return transform.position;
+        float pivotToFeet = player.transform.position.y - col.bounds.min.y;
+        int mask = LayerMask.GetMask("Ground");
+        var hit = Physics2D.Raycast((Vector2)transform.position + Vector2.up * 3f, Vector2.down, 10f, mask);
+        if (hit.collider == null || hit.collider.isTrigger) return transform.position + Vector3.up * pivotToFeet;
+        return new Vector3(transform.position.x, hit.point.y + pivotToFeet + 0.05f, transform.position.z);
     }
 
     private void OnDrawGizmos()

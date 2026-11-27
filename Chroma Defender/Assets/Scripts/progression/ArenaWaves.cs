@@ -21,6 +21,8 @@ public class ArenaWaves : MonoBehaviour
     {
         public string title = "Onda";
         public GameObject[] enemies;
+        [Tooltip("Chefes DESATIVADOS na cena que entram junto nesta onda (a arena cria uma cópia de cada).")]
+        public GameObject[] bosses;
     }
 
     [Header("--- Arena ---")]
@@ -70,6 +72,9 @@ public class ArenaWaves : MonoBehaviour
     {
         GetComponent<BoxCollider2D>().isTrigger = true;
         if (bossTemplate != null) bossTemplate.SetActive(false);
+        if (waves != null)
+            foreach (var w in waves)
+                if (w.bosses != null) foreach (var b in w.bosses) if (b != null) b.SetActive(false);
         SetGlow(0f);
     }
 
@@ -112,6 +117,7 @@ public class ArenaWaves : MonoBehaviour
             yield return new WaitUntil(() => AliveCount() == 0);
 
             bool last = i == waves.Length - 1;
+            if (last && bossTemplate == null) break; // sem chefe extra: a última onda encerra a arena
             string next = last && bossTemplate != null ? "O CHEFE vem aí" : $"Onda {i + 2}";
             yield return HealBreak($"Onda {i + 1} vencida! {next} em {breakDuration:0}s.");
         }
@@ -134,6 +140,21 @@ public class ArenaWaves : MonoBehaviour
 
     private IEnumerator SpawnWave(Wave w)
     {
+        if (w.bosses != null)
+        {
+            foreach (var template in w.bosses)
+            {
+                if (template == null) continue;
+                var copy = Instantiate(template, template.transform.position, template.transform.rotation, template.transform.parent);
+                copy.name = template.name + "_Onda";
+                copy.SetActive(true);
+                var boss = copy.GetComponent<BossBase>();
+                if (boss != null) boss.ConfigureArena(arenaMinX, arenaMaxX);
+                FireVFX.SpawnFlameBurst(copy.transform.position + Vector3.up * 1.5f, 30);
+                alive.Add(copy);
+            }
+            if (w.bosses.Length > 0) yield return new WaitForSeconds(0.8f);
+        }
         if (w.enemies == null) yield break;
         for (int i = 0; i < w.enemies.Length; i++)
         {
@@ -221,7 +242,9 @@ public class ArenaWaves : MonoBehaviour
     private static bool IsDead(GameObject go)
     {
         var e = go.GetComponent<EnemyBehavior>();
-        return e != null && e.IsDead;
+        if (e != null) return e.IsDead;
+        var b = go.GetComponent<BossBase>();
+        return b != null && b.IsDead;
     }
 
     private static readonly FieldInfo detectionField =

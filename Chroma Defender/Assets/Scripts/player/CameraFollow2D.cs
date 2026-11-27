@@ -97,6 +97,7 @@ public class CameraFollow2D : MonoBehaviour
         transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref currentVelocity, smoothTime);
     }
 
+    private float defaultOrtho;
     private CameraZone currentZone;
     private CameraZone lastZone;
     private Camera cam;
@@ -106,7 +107,14 @@ public class CameraFollow2D : MonoBehaviour
     {
         if (target == null) return pos;
         if (cam == null) cam = GetComponent<Camera>();
+        if (cam != null && defaultOrtho <= 0f) defaultOrtho = cam.orthographicSize;
         currentZone = CameraZone.Find(target.position);
+        if (cam != null && cam.orthographic && Application.isPlaying)
+        {
+            // Zoom por área (ex.: sala do chefe gigante). Troca de área = ajuste imediato; dentro dela, suave.
+            float wanted = currentZone != null && currentZone.OrthoSize > 0f ? currentZone.OrthoSize : defaultOrtho;
+            cam.orthographicSize = currentZone != lastZone ? wanted : Mathf.MoveTowards(cam.orthographicSize, wanted, 6f * Time.deltaTime);
+        }
         if (currentZone == null || cam == null || !cam.orthographic) return pos;
         float halfH = cam.orthographicSize;
         return currentZone.Clamp(pos, halfH * cam.aspect, halfH);
