@@ -42,6 +42,11 @@ public class UpgradeChest : MonoBehaviour
     [Tooltip("Altura do aviso \"Abrir baú\" acima da base do baú.")]
     [SerializeField] private float promptHeight = 1.6f;
 
+    [Header("--- Tranca (alavanca) ---")]
+    [Tooltip("Flag que precisa estar ativa para o baú abrir (ex.: a mesma flagId da CastleLever). Vazio = sem tranca.")]
+    [SerializeField] private string requiredFlag = "";
+    [SerializeField] private string lockedMessage = "Baú trancado. Procure a alavanca do labirinto.";
+
     [Header("--- Referências ---")]
     [SerializeField] private Animator animator;
 
@@ -94,8 +99,25 @@ public class UpgradeChest : MonoBehaviour
 
         var kb = Keyboard.current;
         bool pressed = kb != null && (kb.wKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame);
-        if (openOnTouch || pressed) StartCoroutine(OpenRoutine());
+        if (!(openOnTouch || pressed)) return;
+
+        if (IsLocked())
+        {
+            if (pressed && Time.time >= nextLockedToastTime)
+            {
+                nextLockedToastTime = Time.time + 2.5f;
+                ProgressHud.Toast(lockedMessage, 2.5f);
+            }
+            return;
+        }
+
+        StartCoroutine(OpenRoutine());
     }
+
+    private float nextLockedToastTime;
+
+    /// <summary>True enquanto a flag de tranca não estiver ativa.</summary>
+    public bool IsLocked() => !string.IsNullOrEmpty(requiredFlag) && !GameProgress.HasFlag(requiredFlag);
 
     private IEnumerator OpenRoutine()
     {
@@ -224,8 +246,9 @@ public class UpgradeChest : MonoBehaviour
 
         // Sombra + texto dourado
         promptStyle.normal.textColor = new Color(0f, 0f, 0f, 0.9f);
-        GUI.Label(new Rect(rect.x + 1.5f, rect.y + 1.5f, rect.width, rect.height), promptText, promptStyle);
+        string text = IsLocked() ? "Trancado" : promptText;
+        GUI.Label(new Rect(rect.x + 1.5f, rect.y + 1.5f, rect.width, rect.height), text, promptStyle);
         promptStyle.normal.textColor = new Color(1f, 0.86f, 0.32f);
-        GUI.Label(rect, promptText, promptStyle);
+        GUI.Label(rect, text, promptStyle);
     }
 }

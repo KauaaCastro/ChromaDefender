@@ -172,6 +172,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyBehavior
   enemyType: 0
+  defeatFlag: 
   polarity: 0
   polarityRule: 1
   invertFacing: 0

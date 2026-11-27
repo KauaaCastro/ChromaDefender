@@ -84,7 +84,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 15
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 6967819863540319931, guid: ae2c84d4e78e8a243a715eebb536dcfc, type: 3}
+  m_Sprite: {fileID: 7551582495221066229, guid: ae2c84d4e78e8a243a715eebb536dcfc, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -171,6 +171,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyBehavior
   enemyType: 2
+  defeatFlag: 
   polarity: 2
   polarityRule: 1
   invertFacing: 0

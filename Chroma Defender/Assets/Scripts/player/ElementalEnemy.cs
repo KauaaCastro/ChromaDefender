@@ -18,6 +18,11 @@ public class ElementalEnemy : MonoBehaviour, IDamageableTarget
     [Header("--- Polaridade Elemental ---")]
     [SerializeField] private EnemyPolarityType polarity = EnemyPolarityType.Neutral;
 
+    [Header("--- Porta por derrota ---")]
+    [Tooltip("Flag ativada quando este inimigo morrer (use na tranca de uma porta para abri-la ao derrotá-lo). Vazio = nenhuma.")]
+    [SerializeField] private string defeatFlag = "";
+    public string DefeatFlag => defeatFlag;
+
     [Header("--- Vida & Dano ---")]
     [SerializeField] private int maxHealth = 60;
     [SerializeField] private int currentHealth;
@@ -260,6 +265,7 @@ public class ElementalEnemy : MonoBehaviour, IDamageableTarget
     {
         if (isDead) return;
         isDead = true;
+        if (!string.IsNullOrEmpty(defeatFlag)) GameProgress.SetFlag(defeatFlag);
 
         if (col != null) col.enabled = false;
         if (rb != null)

@@ -35,6 +35,9 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
     [Header("--- Tipo & Identificação ---")]
     [Tooltip("Selecione o tipo do monstro. Ao alterar, valores padrão ideais podem ser ajustados.")]
     [SerializeField] private EnemyType enemyType = EnemyType.Slime;
+    [Tooltip("Flag ativada quando este inimigo morrer. Use na 'Tranca' de uma porta (LockType = Alavanca) para abri-la ao derrotá-lo. Vazio = nenhuma.")]
+    [SerializeField] private string defeatFlag = "";
+    public string DefeatFlag => defeatFlag;
 
     public enum PolarityRuleMode
     {
@@ -296,6 +299,13 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
 
         if (playerTransform == null) FindPlayer();
 
+        // Rede de segurança: mob terrestre que caiu para fora do mapa volta ao ponto de spawn.
+        if (!isFlying && transform.position.y < spawnY - 8f)
+        {
+            RespawnAtSpawn();
+            return;
+        }
+
         // Máquina de estados
         switch (currentState)
         {
@@ -361,7 +371,8 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
                     float adx = Mathf.Abs(dx);
                     if (keepDistance > 0f && adx < keepDistance) vx = -dirX * chaseSpeed * 0.8f; // recua para manter distância
                     else if (rangedAttack && adx <= attackRange * 0.85f) vx = 0f;               // já no alcance: para e mira
-                    if (vx != 0f && (rangedAttack || keepDistance > 0f) && CheckLedgeInDirection((int)Mathf.Sign(vx))) vx = 0f; // não cai da plataforma
+                    // Mobs terrestres nunca perseguem para fora da plataforma (corpo a corpo também).
+                    if (vx != 0f && CheckLedgeInDirection((int)Mathf.Sign(vx))) vx = 0f;
                     rb.linearVelocity = new Vector2(vx, rb.linearVelocity.y);
                 }
             }
@@ -421,6 +432,22 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
     }
 
     private bool CheckLedgeAhead() => CheckLedgeInDirection(patrolDirection);
+
+    /// <summary>Devolve o mob ao ponto de nascimento (usado quando ele cai do mapa).</summary>
+    private void RespawnAtSpawn()
+    {
+        Vector3 p = new Vector3(spawnX, spawnY, transform.position.z);
+        transform.position = p;
+        if (rb != null)
+        {
+            rb.position = p;
+            rb.linearVelocity = Vector2.zero;
+        }
+        patrolDirection = 1;
+        isTurning = false;
+        turnTimer = 0f;
+        currentState = State.Patrol;
+    }
 
     private bool CheckLedgeInDirection(int dir)
     {
@@ -772,6 +799,7 @@ public class EnemyBehavior : MonoBehaviour, IDamageableTarget
         if (isDead) return;
         isDead = true;
         currentState = State.Dead;
+        if (!string.IsNullOrEmpty(defeatFlag)) GameProgress.SetFlag(defeatFlag);
         if (attackRoutine != null) { StopCoroutine(attackRoutine); attackRoutine = null; }
 
         // Recompensa: devolve um pouco de vida ao jogador

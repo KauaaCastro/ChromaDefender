@@ -38,6 +38,11 @@ public class ParallaxBackground : MonoBehaviour
         public float alphaPulseSpeed = 0.4f;
 
         public Color tint = Color.white;
+
+        [Tooltip("Ligue para escolher a ordem de desenho desta camada (ex.: névoa na frente do jogador). Desligado = usa Base Sorting Order + índice.")]
+        public bool useCustomSortingOrder = false;
+        [Tooltip("Sorting Order fixo desta camada (quando 'Use Custom Sorting Order' está ligado).")]
+        public int customSortingOrder = 51;
     }
 
     [Header("--- Câmera ---")]
@@ -47,6 +52,16 @@ public class ParallaxBackground : MonoBehaviour
     [Tooltip("Quanto da movimentação vertical da câmera vira parallax (0 = nenhum).")]
     [SerializeField] private float verticalFactor = 0.15f;
     [SerializeField] private float zPosition = 0f;
+
+    [Header("--- Limitar a uma área ---")]
+    [Tooltip("Liga: as camadas deste componente só aparecem quando a câmera está dentro da área abaixo (ex.: névoa só no labirinto).")]
+    [SerializeField] private bool limitToArea = false;
+    [Tooltip("Centro da área (um objeto vazio posicionado na cena).")]
+    [SerializeField] private Transform areaCenter;
+    [Tooltip("Tamanho da área em unidades (largura x altura).")]
+    [SerializeField] private Vector2 areaSize = new Vector2(20f, 10f);
+    [Tooltip("Inverte: as camadas aparecem FORA da área (use para esconder a floresta dentro da zona).")]
+    [SerializeField] private bool invertArea = false;
 
     [Header("--- Ordenação ---")]
     [SerializeField] private string sortingLayerName = "Default";
@@ -65,6 +80,7 @@ public class ParallaxBackground : MonoBehaviour
     }
 
     private readonly List<Runtime> runtime = new List<Runtime>();
+    private bool areaVisible = true;
     private Vector2 origin;
     private float maxVerticalShift;
 
@@ -86,6 +102,7 @@ public class ParallaxBackground : MonoBehaviour
             if (Application.isPlaying) Destroy(child); else DestroyImmediate(child);
         }
         runtime.Clear();
+        areaVisible = true; // os objetos recém-criados começam ativos
 
         Camera cam = targetCamera != null ? targetCamera : Camera.main;
         float viewHeight = (cam != null && cam.orthographic) ? cam.orthographicSize * 2f : 10f;
@@ -117,7 +134,7 @@ public class ParallaxBackground : MonoBehaviour
                 tile.sprite = layer.sprite;
                 tile.color = layer.tint;
                 tile.sortingLayerName = sortingLayerName;
-                tile.sortingOrder = baseSortingOrder + i;
+                tile.sortingOrder = layer.useCustomSortingOrder ? layer.customSortingOrder : baseSortingOrder + i;
                 rt.tiles[k] = tile;
             }
             runtime.Add(rt);
@@ -130,6 +147,19 @@ public class ParallaxBackground : MonoBehaviour
 
         Vector3 camPos = targetCamera.transform.position;
         transform.position = new Vector3(camPos.x, camPos.y, zPosition);
+
+        if (limitToArea && areaCenter != null)
+        {
+            Vector3 c = areaCenter.position;
+            bool inside = Mathf.Abs(camPos.x - c.x) <= areaSize.x * 0.5f && Mathf.Abs(camPos.y - c.y) <= areaSize.y * 0.5f;
+            bool show = inside != invertArea;
+            if (show != areaVisible)
+            {
+                areaVisible = show;
+                foreach (var rt in runtime) if (rt.root != null) rt.root.gameObject.SetActive(show);
+            }
+            if (!show) return;
+        }
 
         float t = Time.time;
         int r = 0;
