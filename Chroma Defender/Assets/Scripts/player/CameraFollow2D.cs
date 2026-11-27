@@ -60,6 +60,7 @@ public class CameraFollow2D : MonoBehaviour
                 startPos.x = Mathf.Clamp(startPos.x, minBounds.x, maxBounds.x);
                 startPos.y = Mathf.Clamp(startPos.y, minBounds.y, maxBounds.y);
             }
+            startPos = ClampToZone(startPos);
             startPos.z = offset.z;
             transform.position = startPos;
         }
@@ -81,9 +82,34 @@ public class CameraFollow2D : MonoBehaviour
             desiredPosition.x = Mathf.Clamp(desiredPosition.x, minBounds.x, maxBounds.x);
             desiredPosition.y = Mathf.Clamp(desiredPosition.y, minBounds.y, maxBounds.y);
         }
+        desiredPosition = ClampToZone(desiredPosition);
         desiredPosition.z = offset.z;
 
+        if (currentZone != lastZone)
+        {
+            // Trocou de área (porta/teleporte): pula direto, sem atravessar o void deslizando.
+            lastZone = currentZone;
+            currentVelocity = Vector3.zero;
+            transform.position = desiredPosition;
+            return;
+        }
+
         transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref currentVelocity, smoothTime);
+    }
+
+    private CameraZone currentZone;
+    private CameraZone lastZone;
+    private Camera cam;
+
+    /// <summary>Mantém a vista dentro da CameraZone onde o alvo está (esconde o void nas bordas e nas quedas).</summary>
+    private Vector3 ClampToZone(Vector3 pos)
+    {
+        if (target == null) return pos;
+        if (cam == null) cam = GetComponent<Camera>();
+        currentZone = CameraZone.Find(target.position);
+        if (currentZone == null || cam == null || !cam.orthographic) return pos;
+        float halfH = cam.orthographicSize;
+        return currentZone.Clamp(pos, halfH * cam.aspect, halfH);
     }
 
     private void AutoFitBoundsToTilemaps()

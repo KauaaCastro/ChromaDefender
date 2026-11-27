@@ -16,7 +16,9 @@ public class UpgradeChest : MonoBehaviour
     {
         LightCombo = 0,
         HeavyAttack = 1,
-        WeaponArt = 2
+        WeaponArt = 2,
+        DamageBoost = 3,
+        Key = 4
     }
 
     [Header("--- Identificação ---")]
@@ -29,9 +31,16 @@ public class UpgradeChest : MonoBehaviour
     [Tooltip("Quantidade de golpes do combo de ataque leve liberada (3 = terceiro golpe, 4 = quarto golpe).")]
     [Range(2, 4)]
     [SerializeField] private int lightComboHits = 3;
+    [Tooltip("Liga: em vez de um número fixo, o baú adiciona +1 golpe ao combo leve atual (até 4).")]
+    [SerializeField] private bool addOneLightHit = false;
     [Tooltip("Quantidade de golpes do ataque pesado liberada (1 a 3) quando Upgrade Kind = HeavyAttack.")]
     [Range(1, 3)]
     [SerializeField] private int heavyComboHits = 1;
+    [Tooltip("Bônus de dano (%) em todos os golpes quando Upgrade Kind = DamageBoost.")]
+    [Range(5, 100)]
+    [SerializeField] private int damageBonusPercent = 15;
+    [Tooltip("Chave entregue quando Upgrade Kind = Key (ex.: chave_area_b2).")]
+    [SerializeField] private string keyId = GameProgress.KeyAreaB2;
     [SerializeField] private string rewardTitle = "Combo Leve — 3º golpe";
     [SerializeField] private string rewardDescription = "Seu ataque rápido agora encadeia 3 golpes!";
 
@@ -139,9 +148,22 @@ public class UpgradeChest : MonoBehaviour
         {
             case UpgradeKind.HeavyAttack: return GameProgress.HeavyComboHits >= heavyComboHits;
             case UpgradeKind.WeaponArt: return GameProgress.WeaponArtUnlocked;
-            default: return GameProgress.LightComboHits >= lightComboHits;
+            case UpgradeKind.DamageBoost: return GameProgress.DamageBonusPercent >= damageBonusPercent;
+            case UpgradeKind.Key: return GameProgress.HasKey(keyId);
+            default: return CurrentLightHits() >= TargetLightHits();
         }
     }
+
+    /// <summary>Golpes do combo leve que o jogador tem agora (mínimo 2).</summary>
+    private int CurrentLightHits()
+    {
+        if (player == null) player = FindAnyObjectByType<PlayerBehavior>();
+        int fromPlayer = player != null ? player.UnlockedLightHits : 2;
+        return Mathf.Max(2, Mathf.Max(fromPlayer, GameProgress.LightComboHits));
+    }
+
+    /// <summary>Quantos golpes o combo leve terá depois deste baú.</summary>
+    private int TargetLightHits() => addOneLightHit ? Mathf.Min(4, CurrentLightHits() + 1) : lightComboHits;
 
     private void GiveReward()
     {
@@ -168,10 +190,25 @@ public class UpgradeChest : MonoBehaviour
                 if (player != null) player.UnlockWeaponArt();
                 break;
 
+            case UpgradeKind.DamageBoost:
+                GameProgress.UnlockDamageBonus(damageBonusPercent);
+                break;
+
+            case UpgradeKind.Key:
+                GameProgress.AddKey(keyId);
+                break;
+
             default:
-                GameProgress.UnlockLightCombo(lightComboHits);
-                if (player != null && player.UnlockedLightHits < lightComboHits)
-                    player.UpgradeLightCombo(lightComboHits);
+                int hits = TargetLightHits();
+                GameProgress.UnlockLightCombo(hits);
+                if (player != null && player.UnlockedLightHits < hits)
+                    player.UpgradeLightCombo(hits);
+                if (addOneLightHit)
+                {
+                    ProgressHud.Toast($"Baú aberto! <color=#FFD54A>Combo Leve — {hits}º golpe</color>\nSeu ataque rápido agora encadeia {hits} golpes!", 4.5f);
+                    FireVFX.SpawnFlameBurst(transform.position + Vector3.up * 0.7f, 22);
+                    return;
+                }
                 break;
         }
 

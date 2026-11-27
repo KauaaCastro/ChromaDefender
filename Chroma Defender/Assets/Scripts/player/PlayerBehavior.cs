@@ -1201,7 +1201,7 @@ public class PlayerBehavior : MonoBehaviour
             if (target != null)
             {
                 Vector2 knockback = new Vector2(facing * knockbackX, knockbackY);
-                target.TakeDamage(damage, knockback, currentPolarity);
+                target.TakeDamage(WithDamageBonus(damage), knockback, currentPolarity);
             }
         }
     }
@@ -1252,7 +1252,7 @@ public class PlayerBehavior : MonoBehaviour
             {
                 // Knockback sutil prendendo o alvo na tempestade de golpes
                 Vector2 knockback = new Vector2(facing * 0.8f, 0f);
-                target.TakeDamage(specialFlurryDamage, knockback, currentPolarity);
+                target.TakeDamage(WithDamageBonus(specialFlurryDamage), knockback, currentPolarity);
             }
         }
     }
@@ -1272,10 +1272,13 @@ public class PlayerBehavior : MonoBehaviour
             if (target != null)
             {
                 Vector2 knockback = new Vector2(facing * specialFinisherKnockback, 3.5f);
-                target.TakeDamage(specialFinisherDamage, knockback, currentPolarity);
+                target.TakeDamage(WithDamageBonus(specialFinisherDamage), knockback, currentPolarity);
             }
         }
     }
+
+    /// <summary>Aplica o bônus de dano permanente (baú da Torre de Escalada) a um golpe.</summary>
+    private static int WithDamageBonus(int damage) => Mathf.RoundToInt(damage * GameProgress.DamageMultiplier);
 
     private void OnDrawGizmosSelected()
     {

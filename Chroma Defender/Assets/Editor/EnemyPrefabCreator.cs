@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -14,7 +14,36 @@ public static class EnemyPrefabCreator
 
     static EnemyPrefabCreator()
     {
-        EditorApplication.delayCall += EnsureAllEnemyPrefabsExist;
+        // Ao abrir/recompilar só cria os prefabs que AINDA NÃO existem. Antes ele recriava os 4 do zero
+        // a cada recompilação e a cada Play, apagando qualquer ajuste feito nos prefabs.
+        EditorApplication.delayCall += CreateMissingEnemyPrefabs;
+    }
+
+    private static void CreateMissingEnemyPrefabs()
+    {
+        bool Missing(string n) => AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabDir}/{n}.prefab") == null;
+        bool any = false;
+        if (!Directory.Exists(PrefabDir)) { Directory.CreateDirectory(PrefabDir); AssetDatabase.Refresh(); }
+        if (Missing("Rat_Enemy")) { CreateRatPrefab(); any = true; }
+        if (Missing("Slime_Enemy")) { CreateSlimePrefab(); any = true; }
+        if (Missing("Bat_Enemy")) { CreateBatPrefab(); any = true; }
+        if (Missing("Mimic_Enemy")) { CreateMimicPrefab(); any = true; }
+        if (any) { AssetDatabase.SaveAssets(); AssetDatabase.Refresh(); }
+    }
+
+    /// <summary>
+    /// O OnValidate do EnemyBehavior carrega sprites assim que o componente é adicionado — com o tipo padrão (Slime).
+    /// Depois de definir o enemyType certo, limpa as listas e recarrega, senão rato/morcego/mímico ficam com cara de slime.
+    /// </summary>
+    private static void ReloadSprites(EnemyBehavior eb)
+    {
+        foreach (var f in new[] { "idleSprites", "moveSprites", "attackSprites", "hurtSprites", "deathFrames" })
+            SetField(eb, f, null);
+        typeof(EnemyBehavior).GetMethod("LoadAllSpritesIfEmpty", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            ?.Invoke(eb, null);
+        var sr = eb.GetComponent<SpriteRenderer>();
+        var idle = typeof(EnemyBehavior).GetField("idleSprites", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(eb) as Sprite[];
+        if (sr != null && idle != null && idle.Length > 0) sr.sprite = idle[0];
     }
 
     [MenuItem("Chroma Defender/Inimigos/1. Criar ou Atualizar Prefabs dos 4 Inimigos")]
@@ -106,7 +135,8 @@ public static class EnemyPrefabCreator
 
         var col = go.AddComponent<CapsuleCollider2D>();
         col.size = new Vector2(0.85f, 0.32f);
-        col.offset = new Vector2(0f, -0.16f);
+        // A folha (156 px, pivô no centro) tem margem transparente: os pés visíveis ficam em y = -0,09.
+        col.offset = new Vector2(0f, -0.09f + 0.16f);
         col.direction = CapsuleDirection2D.Horizontal;
 
         var eb = go.AddComponent<EnemyBehavior>();
@@ -118,6 +148,7 @@ public static class EnemyPrefabCreator
         SetField(eb, "contactDamage", 12);
         SetField(eb, "patrolSpeed", 2.0f);
         SetField(eb, "patrolDistance", 3.5f);
+        ReloadSprites(eb);
         eb.ApplyElementalTint();
 
         SaveAsPrefab(go, path);
@@ -142,13 +173,16 @@ public static class EnemyPrefabCreator
 
         var col = go.AddComponent<CircleCollider2D>();
         col.radius = 0.28f;
-        col.offset = new Vector2(0f, -0.28f);
+        // Pés visíveis do sprite em y = -0,09 (margem transparente da folha de 156 px).
+        col.offset = new Vector2(0f, -0.09f + 0.28f);
+        // Slime grande (2,4x): a folha tem muita margem transparente, o corpo visível fica ~ altura do herói.
+        go.transform.localScale = new Vector3(2.4f, 2.4f, 1f);
 
         var eb = go.AddComponent<EnemyBehavior>();
         SetField(eb, "enemyType", EnemyType.Slime);
         SetField(eb, "polarity", EnemyPolarityType.Ice);
         SetField(eb, "canActivelyAttack", true);
-        SetField(eb, "maxHealth", 50);
+        SetField(eb, "maxHealth", 80);
         SetField(eb, "contactDamage", 15);
         SetField(eb, "activeAttackDamage", 20);
         SetField(eb, "attackKnockback", 5f);
@@ -157,6 +191,7 @@ public static class EnemyPrefabCreator
         SetField(eb, "patrolSpeed", 1.4f);
         SetField(eb, "chaseSpeed", 2.2f);
         SetField(eb, "patrolDistance", 3.0f);
+        ReloadSprites(eb);
         eb.ApplyElementalTint();
 
         SaveAsPrefab(go, path);
@@ -196,6 +231,7 @@ public static class EnemyPrefabCreator
         SetField(eb, "patrolSpeed", 2.2f);
         SetField(eb, "chaseSpeed", 3.2f);
         SetField(eb, "patrolDistance", 4.0f);
+        ReloadSprites(eb);
         eb.ApplyElementalTint();
 
         SaveAsPrefab(go, path);
@@ -220,7 +256,8 @@ public static class EnemyPrefabCreator
 
         var col = go.AddComponent<BoxCollider2D>();
         col.size = new Vector2(0.85f, 0.55f);
-        col.offset = new Vector2(0f, -0.25f);
+        // Pés visíveis do sprite em y = -0,10 (folha de 146 px com margem transparente).
+        col.offset = new Vector2(0f, -0.10f + 0.275f);
 
         var eb = go.AddComponent<EnemyBehavior>();
         SetField(eb, "enemyType", EnemyType.Mimic);
@@ -235,6 +272,7 @@ public static class EnemyPrefabCreator
         SetField(eb, "patrolSpeed", 1.2f);
         SetField(eb, "chaseSpeed", 2.6f);
         SetField(eb, "patrolDistance", 2.0f);
+        ReloadSprites(eb);
         eb.ApplyElementalTint();
 
         SaveAsPrefab(go, path);

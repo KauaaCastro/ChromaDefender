@@ -30,7 +30,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 2.4, y: 2.4, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -84,7 +84,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 15
   m_MaskInteraction: 0
-  m_Sprite: {fileID: -5906421172241655209, guid: df6e574b84354394e8f320364f10d595, type: 3}
+  m_Sprite: {fileID: 8793639957104055765, guid: df6e574b84354394e8f320364f10d595, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -156,7 +156,7 @@ CircleCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0, y: -0.28}
+  m_Offset: {x: 0, y: 0.19}
   m_Radius: 0.28
 --- !u!114 &8822396273121782057
 MonoBehaviour:
@@ -175,7 +175,7 @@ MonoBehaviour:
   polarity: 1
   polarityRule: 1
   invertFacing: 0
-  maxHealth: 50
+  maxHealth: 80
   currentHealth: 0
   contactDamage: 15
   contactKnockbackX: 8.5

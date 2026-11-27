@@ -118,6 +118,17 @@ public class CastleDoor : MonoBehaviour
     public bool RequiresFlag(string flag) => lockType == LockType.Alavanca && !string.IsNullOrEmpty(flag) && requiredFlag == flag;
     public void SetId(string id) => doorId = id;
 
+    // Selo temporário controlado por eventos (ex.: arena de ondas trancando a saída durante a luta).
+    private bool eventSealed;
+    private string eventSealMessage;
+
+    /// <summary>Tranca/destranca a porta por código, independentemente do tipo de tranca configurado.</summary>
+    public void SetSealed(bool value, string message = null)
+    {
+        eventSealed = value;
+        eventSealMessage = message;
+    }
+
     // ================================================================== ciclo de vida
 
     private void OnEnable() { if (!all.Contains(this)) all.Add(this); }
@@ -181,6 +192,11 @@ public class CastleDoor : MonoBehaviour
     public bool IsLocked(out string reason)
     {
         reason = null;
+        if (eventSealed)
+        {
+            reason = !string.IsNullOrEmpty(eventSealMessage) ? eventSealMessage : "A porta está selada por magia.";
+            return true;
+        }
         switch (lockType)
         {
             case LockType.Chave:

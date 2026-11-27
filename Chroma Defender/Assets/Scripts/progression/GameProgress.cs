@@ -17,6 +17,7 @@ public static class GameProgress
     public const string KeyCastelo = "chave_castelo";
     public const string KeyPoco = "chave_poco";
     public const string KeyLabirinto = "chave_labirinto";
+    public const string KeyAreaB2 = "chave_area_b2";
 
     // --- Flags de mundo ---
     public const string FlagBossFase1 = "boss_fase1_derrotado";
@@ -73,6 +74,19 @@ public static class GameProgress
         OnChanged?.Invoke();
     }
 
+    /// <summary>Bônus de dano (%) aplicado a todos os golpes do cavaleiro (ex.: 15 = +15%).</summary>
+    public static int DamageBonusPercent { get; private set; }
+
+    /// <summary>Multiplicador de dano derivado do bônus (1.15 para +15%).</summary>
+    public static float DamageMultiplier => 1f + DamageBonusPercent / 100f;
+
+    public static void UnlockDamageBonus(int percent)
+    {
+        if (percent <= DamageBonusPercent) return;
+        DamageBonusPercent = percent;
+        OnChanged?.Invoke();
+    }
+
     public static IEnumerable<string> Keys => keys;
 
     public static bool HasKey(string keyId) => !string.IsNullOrEmpty(keyId) && keys.Contains(keyId);
@@ -99,6 +113,7 @@ public static class GameProgress
         LightComboHits = 0;
         HeavyComboHits = 0;
         WeaponArtUnlocked = false;
+        DamageBonusPercent = 0;
         PendingSpawnId = null;
         OnChanged?.Invoke();
     }
@@ -110,6 +125,7 @@ public static class GameProgress
             case KeyCastelo: return "Chave Dourada do Castelo";
             case KeyPoco: return "Chave de Prata do Poço";
             case KeyLabirinto: return "Chave de Ferro do Labirinto";
+            case KeyAreaB2: return "Chave da Área B2";
             default: return keyId;
         }
     }
@@ -123,6 +139,7 @@ public static class GameProgress
         LightComboHits = 0;
         HeavyComboHits = 0;
         WeaponArtUnlocked = false;
+        DamageBonusPercent = 0;
         PendingSpawnId = null;
         OnChanged = null;
     }
